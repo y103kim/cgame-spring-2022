@@ -2,6 +2,39 @@ import math._
 import scala.util._
 import scala.io.StdIn._
 
+@inline final case class Vec2(x: Long, y: Long) {
+  @inline def unary_- = Vec2(-x, -y)
+  @inline def abs = Vec2(Math.abs(x), Math.abs(y))
+  @inline def psum = x + y
+
+  @inline def +(that: Vec2) = Vec2(x + that.x, y + that.y)
+  @inline def +(that: Long) = Vec2(x + that, y + that)
+  @inline def -(that: Vec2) = Vec2(x - that.x, y - that.y)
+  @inline def -(that: Long) = Vec2(x - that, y - that)
+  @inline def *(a: Long) = Vec2(x * a, y * a)
+  @inline def /(a: Long) = Vec2(x / a, y / a)
+  @inline def dot(that: Vec2) = x * that.x + y * that.y
+  @inline def cross(that: Vec2) = x * that.y - y * that.x
+
+  @inline def lengthSq = x * x + y * y
+  @inline def length = Math.sqrt(lengthSq)
+  @inline def normalized = this / length.toLong
+  @inline def truncate(size: Long) = this / size
+  @inline def area = x * y
+  @inline def normal = Vec2(y, -x)
+  @inline def angle = Math.atan2(y, x)
+  @inline def toTuple = (x, y)
+
+  @inline def dist(that: Vec2) = (this - that).length
+  @inline def hamdist(that: Vec2) = (this - that).abs.psum
+}
+
+object Vec2 {
+  @inline def apply(x: Long, y: Long) = new Vec2(x, y)
+  @inline def apply(tuple: (Long, Long)) = new Vec2(tuple._1, tuple._2)
+  @inline def apply(x: Long) = new Vec2(x, x)
+}
+
 object Player extends App {
   // baseX: The corner of the map representing your base
   val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
