@@ -49,12 +49,12 @@ object GameStatus {
   }
 }
 
-class Entity(vPos: Vec2, vVel: Vec2) {
+class Entity(id: Int, vPos: Vec2, vVel: Vec2) {
   def validate(data: Seq[Int]) = this
   def takeTurn() = this
 }
-case class Hero(vPos: Vec2, owner: Int) extends Entity(vPos, Vec2())
-case class Enemy(vPos: Vec2, vVel: Vec2) extends Entity(vPos, vVel)
+case class Hero(id: Int, vPos: Vec2, owner: Int) extends Entity(id, vPos, Vec2())
+case class Enemy(id: Int, vPos: Vec2, vVel: Vec2) extends Entity(id, vPos, vVel)
 
 class EntityPool(
     val entityMap: Map[Int, Entity] = Map(),
@@ -63,14 +63,14 @@ class EntityPool(
     val enemies: Seq[Enemy] = Seq()
 ) {
 
-  def createHero(data: Seq[Int], owner: Int) = {
+  def createHero(id: Int, data: Seq[Int], owner: Int) = {
     val Seq(x, y, shield, ctrl, _*) = data
-    Hero(Vec2(x, y), owner)
+    (id, Hero(id, Vec2(x, y), owner))
   }
 
-  def createEnemy(data: Seq[Int]) = {
+  def createEnemy(id: Int, data: Seq[Int]) = {
     val Seq(x, y, shield, _, _, vx, vy, _*) = data
-    Enemy(Vec2(x, y), Vec2(vx, vy))
+    (id, Enemy(id, Vec2(x, y), Vec2(vx, vy)))
   }
 
   def regen() = {
@@ -80,9 +80,9 @@ class EntityPool(
     val newEntityMap = inputData
       .map(_ match {
         case Array(id, rest @ _*) if em.contains(id) => (id, em(id).validate(rest))
-        case Array(id, 1, rest @ _*)                 => (id, createHero(rest, 1))
-        case Array(id, 2, rest @ _*)                 => (id, createHero(rest, 2))
-        case Array(id, 0, rest @ _*)                 => (id, createEnemy(rest))
+        case Array(id, 1, rest @ _*)                 => createHero(id, rest, 1)
+        case Array(id, 2, rest @ _*)                 => createHero(id, rest, 2)
+        case Array(id, 0, rest @ _*)                 => createEnemy(id, rest)
       })
       .toMap
 
