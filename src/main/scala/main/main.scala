@@ -27,6 +27,7 @@ import scala.io.StdIn._
 
   @inline def dist(that: Vec2) = (this - that).length
   @inline def hamdist(that: Vec2) = (this - that).abs.psum
+  @inline def bound = 0 <= x && x <= 17630 && 0 <= y && y <= 9000
 }
 
 object Vec2 {
@@ -36,16 +37,17 @@ object Vec2 {
   @inline def apply() = new Vec2(0, 0)
 }
 
-case class Nexus(health: Int, mana: Int);
+case class Nexus(health: Int, mana: Int, pos: Vec2) {
+  def isNear(v: Vec2) = pos.hamdist(v) <= 5000 && pos.dist(v) <= 5000
+  def dirVec(p: Vec2) = (pos - p).truncate(400)
+}
 
-object GameStatus {
-  var myNexus = Nexus(3, 0)
-  var myPos = Vec2(0, 0)
-  var oppNexus = Nexus(3, 0)
-  var oppPos = Vec2(17630, 9000)
+object GS {
+  var myNexus = Nexus(3, 0, Vec2(0, 0))
+  var oppNexus = Nexus(3, 0, Vec2(17630, 9000))
 
   def print() = {
-    Console.err.println((myNexus, myPos, oppNexus, oppPos))
+    Console.err.println((myNexus, oppNexus))
   }
 }
 
@@ -104,29 +106,31 @@ class EntityPool(
 }
 
 object Game extends App {
+  val DEBUG = false
   def initNexus() = {
     val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
     val heroesPerPlayer = readLine.toInt
     if (baseX != 0) {
-      GameStatus.myPos = GameStatus.oppPos;
-      GameStatus.oppPos = Vec2()
+      val temp = GS.myNexus
+      GS.myNexus = GS.oppNexus;
+      GS.oppNexus = temp
     }
   }
 
   def updateNexusStatus() = {
     val Array(h1, m1) = (readLine split " ").filter(_ != "").map(_.toInt)
-    GameStatus.myNexus = Nexus(h1, m1)
+    GS.myNexus = Nexus(h1, m1, GS.myNexus.pos)
     val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
-    GameStatus.oppNexus = Nexus(h2, m2)
+    GS.oppNexus = Nexus(h2, m2, GS.oppNexus.pos)
   }
 
   def loop() = {
     var pool = new EntityPool
     while (true) {
       Game.updateNexusStatus()
-      GameStatus.print()
+      GS.print()
       pool = pool.regen()
-      pool.print()
+      if (DEBUG) pool.print()
       for (i <- 0 until 3)
         println("WAIT")
     }
