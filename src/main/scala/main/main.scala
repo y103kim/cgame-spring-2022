@@ -3,6 +3,7 @@ import scala.util._
 import scala.io.StdIn._
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
+import scala.collection.mutable
 
 @inline final case class Vec2(x: Int, y: Int) {
   @inline def unary_- = Vec2(-x, -y)
@@ -71,9 +72,7 @@ case class Enemy(
 
   override def validate(data: Seq[Int]): (Int, Entity) = {
     val Seq(_, x, y, shield, _, _, vx, vy, _, tf) = data
-    assert(vPos == Vec2(x, y))
-    assert(vVel == Vec2(vx, vy))
-    assert(threatFor == tf)
+    assert(vPos == Vec2(x, y), s"${this} / ${data}")
     return (id, this)
   }
 
@@ -184,8 +183,26 @@ object Game extends App {
       GS.print()
       pool = pool.regen()
       if (DEBUG) pool.print()
-      for (i <- 0 until 3)
-        println("WAIT")
+      var heros = pool.myHeros
+      val heroIds = pool.myHeros.map(_.id)
+      val moves = mutable.Map[Int, Vec2]()
+      val dangers = pool.enemies
+        .filter(_.threatFor == 1)
+        .sortBy(_.trajactory.size)
+        .take(3)
+        .foreach(e => {
+          heros = heros.sortBy(h => h.vPos.dist(e.vPos))
+          moves(heros.head.id) = e.vPos
+          heros = heros.tail
+        })
+
+      for (i <- heroIds)
+        if (moves.contains(i))
+          println(s"MOVE ${moves(i).x} ${moves(i).y}")
+        else if (GS.myNexus.pos.x == 0)
+          println(s"MOVE 3535 3535")
+        else
+          println(s"MOVE 14095 5465")
     }
   }
 }
