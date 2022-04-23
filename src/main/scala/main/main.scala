@@ -1,5 +1,3 @@
-package main
-
 import math._
 import scala.util._
 import scala.io.StdIn._
@@ -55,12 +53,37 @@ object GS {
   }
 }
 
-class Entity(id: Int, vPos: Vec2, vVel: Vec2) {
-  def validate(data: Seq[Int]) = this
+class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2) {
+  def validate(data: Seq[Int]) = (id, this)
   def takeTurn() = this
 }
-case class Hero(id: Int, vPos: Vec2, owner: Int) extends Entity(id, vPos, Vec2())
-case class Enemy(id: Int, vPos: Vec2, vVel: Vec2) extends Entity(id, vPos, vVel)
+
+case class Hero(override val id: Int, override val vPos: Vec2, owner: Int)
+    extends Entity(id, vPos, Vec2())
+
+case class Enemy(
+    override val id: Int,
+    override val vPos: Vec2,
+    override val vVel: Vec2,
+    trajactory: Queue[(Vec2, Vec2)],
+    threatFor: Int
+) extends Entity(id, vPos, vVel) {
+
+  override def validate(data: Seq[Int]): (Int, Entity) = {
+    val Seq(_, x, y, shield, _, _, vx, vy, _, tf) = data
+    assert(vPos == Vec2(x, y))
+    assert(vVel == Vec2(vx, vy))
+    assert(threatFor == tf)
+    return (id, this)
+  }
+
+  override def takeTurn(): Enemy = {
+    val (newPos, newVel) = trajactory.tail.head
+    new Enemy(id, newPos, newVel, trajactory.tail, threatFor)
+  }
+
+  override def toString() = s"E${id}, vPos=${vPos} vVel=${vVel} threatFor=${threatFor}"
+}
 
 class EntityPool(
     val entityMap: Map[Int, Entity] = Map(),
@@ -102,7 +125,7 @@ class EntityPool(
     }
 
     val (trajactory, threatFor) = getTraj(vPos, vVel)
-    (id, Enemy(id, vPos, vVel))
+    (id, Enemy(id, vPos, vVel, trajactory, threatFor))
   }
 
   def regen() = {
@@ -111,7 +134,7 @@ class EntityPool(
     val em = entityMap.mapValues(_.takeTurn())
     val newEntityMap = inputData
       .map(_ match {
-        case Array(id, rest @ _*) if em.contains(id) => (id, em(id).validate(rest))
+        case Array(id, rest @ _*) if em.contains(id) => em(id).validate(rest)
         case Array(id, 1, rest @ _*)                 => createHero(id, rest, 1)
         case Array(id, 2, rest @ _*)                 => createHero(id, rest, 2)
         case Array(id, 0, rest @ _*)                 => createEnemy(id, rest)
