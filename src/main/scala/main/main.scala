@@ -49,6 +49,60 @@ object GameStatus {
   }
 }
 
+class Entity(vPos: Vec2, vVel: Vec2) {
+  def validate(data: Seq[Int]) = this
+  def takeTurn() = this
+}
+case class Hero(vPos: Vec2, owner: Int) extends Entity(vPos, Vec2())
+case class Enemy(vPos: Vec2, vVel: Vec2) extends Entity(vPos, vVel)
+
+class EntityPool(
+    val entityMap: Map[Int, Entity] = Map(),
+    val myHeros: Seq[Hero] = Seq(),
+    val oppHeros: Seq[Hero] = Seq(),
+    val enemies: Seq[Enemy] = Seq()
+) {
+
+  def createHero(data: Seq[Int], owner: Int) = {
+    val Seq(x, y, shield, ctrl, _*) = data
+    Hero(Vec2(x, y), owner)
+  }
+
+  def createEnemy(data: Seq[Int]) = {
+    val Seq(x, y, shield, _, _, vx, vy, _*) = data
+    Enemy(Vec2(x, y), Vec2(vx, vy))
+  }
+
+  def regen() = {
+    val ec = readLine.toInt // Amount of heros and monsters you can see
+    val inputData = (0 until ec).map(x => (readLine split " ").filter(_ != "").map(_.toInt))
+    val em = entityMap.mapValues(_.takeTurn())
+    val newEntityMap = inputData
+      .map(_ match {
+        case Array(id, rest @ _*) if em.contains(id) => (id, em(id).validate(rest))
+        case Array(id, 1, rest @ _*)                 => (id, createHero(rest, 1))
+        case Array(id, 2, rest @ _*)                 => (id, createHero(rest, 2))
+        case Array(id, 0, rest @ _*)                 => (id, createEnemy(rest))
+      })
+      .toMap
+
+    def collectHero(owner: Int) = newEntityMap.values.collect {
+      case hero: Hero if hero.owner == owner => hero
+    }.toSeq
+
+    val newMyHeros = if (myHeros.size != 0) myHeros else collectHero(1)
+    val newOppHeros = if (oppHeros.size != 0) oppHeros else collectHero(2)
+    val enemies = newEntityMap.values.collect { case e: Enemy => e }.toSeq
+
+    new EntityPool(newEntityMap, newMyHeros, newOppHeros, enemies)
+  }
+
+  def print() = {
+    Console.err.println(s"entities[${entityMap.size}]")
+    entityMap.foreach(Console.err.println)
+  }
+}
+
 object Game extends App {
   def initNexus() = {
     val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
@@ -65,46 +119,21 @@ object Game extends App {
     val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
     GameStatus.oppNexus = Nexus(h2, m2)
   }
+
+  def loop() = {
+    var pool = new EntityPool
+    while (true) {
+      Game.updateNexusStatus()
+      GameStatus.print()
+      pool = pool.regen()
+      pool.print()
+      for (i <- 0 until 3)
+        println("WAIT")
+    }
+  }
 }
 
 object Player extends App {
   Game.initNexus()
-  // game loop
-  while (true) {
-    Game.updateNexusStatus()
-    GameStatus.print()
-    val entityCount = readLine.toInt // Amount of heros and monsters you can see
-    for (i <- 0 until entityCount) {
-      // id: Unique identifier
-      // _type: 0=monster, 1=your hero, 2=opponent hero
-      // x: Position of this entity
-      // shieldLife: Ignore for this league; Count down until shield spell fades
-      // isControlled: Ignore for this league; Equals 1 when this entity is under a control spell
-      // health: Remaining health of this monster
-      // vx: Trajectory of this monster
-      // nearBase: 0=monster with no target yet, 1=monster targeting a base
-      // threatFor: Given this monster's trajectory, is it a threat to 1=your base, 2=your opponent's base, 0=neither
-      val Array(
-        id,
-        _type,
-        x,
-        y,
-        shieldLife,
-        isControlled,
-        health,
-        vx,
-        vy,
-        nearBase,
-        threatFor
-      ) = (readLine split " ").filter(_ != "").map(_.toInt)
-    }
-    for (i <- 0 until 3) {
-
-      // Write an action using println
-      // To debug: Console.err.println("Debug messages...")
-
-      // In the first league: MOVE <x> <y> | WAIT; In later leagues: | SPELL <spellParams>;
-      println("WAIT")
-    }
-  }
+  Game.loop()
 }
