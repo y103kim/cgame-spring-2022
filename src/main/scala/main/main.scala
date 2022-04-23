@@ -71,9 +71,11 @@ case class Enemy(
 ) extends Entity(id, vPos, vVel) {
 
   override def validate(data: Seq[Int]): (Int, Entity) = {
-    val Seq(_, x, y, shield, _, _, vx, vy, _, tf) = data
-    assert(vPos == Vec2(x, y), s"${this} / ${data}")
-    return (id, this)
+    val Seq(x, y, shield, _, _, vx, vy, _, tf) = data
+    if (vPos != Vec2(x, y))
+      return EntityFactory.createEnemy(id, data)
+    else
+      return (id, this)
   }
 
   override def takeTurn(): Enemy = {
@@ -84,13 +86,7 @@ case class Enemy(
   override def toString() = s"E${id}, vPos=${vPos} vVel=${vVel} threatFor=${threatFor}"
 }
 
-class EntityPool(
-    val entityMap: Map[Int, Entity] = Map(),
-    val myHeros: Seq[Hero] = Seq(),
-    val oppHeros: Seq[Hero] = Seq(),
-    val enemies: Seq[Enemy] = Seq()
-) {
-
+object EntityFactory {
   def createHero(id: Int, data: Seq[Int], owner: Int) = {
     val Seq(x, y, shield, ctrl, _*) = data
     (id, Hero(id, Vec2(x, y), owner))
@@ -126,6 +122,14 @@ class EntityPool(
     val (trajactory, threatFor) = getTraj(vPos, vVel)
     (id, Enemy(id, vPos, vVel, trajactory, threatFor))
   }
+}
+
+class EntityPool(
+    val entityMap: Map[Int, Entity] = Map(),
+    val myHeros: Seq[Hero] = Seq(),
+    val oppHeros: Seq[Hero] = Seq(),
+    val enemies: Seq[Enemy] = Seq()
+) {
 
   def regen() = {
     val ec = readLine.toInt // Amount of heros and monsters you can see
@@ -133,10 +137,10 @@ class EntityPool(
     val em = entityMap.mapValues(_.takeTurn())
     val newEntityMap = inputData
       .map(_ match {
-        case Array(id, rest @ _*) if em.contains(id) => em(id).validate(rest)
-        case Array(id, 1, rest @ _*)                 => createHero(id, rest, 1)
-        case Array(id, 2, rest @ _*)                 => createHero(id, rest, 2)
-        case Array(id, 0, rest @ _*)                 => createEnemy(id, rest)
+        case Array(id, _, rest @ _*) if em.contains(id) => em(id).validate(rest)
+        case Array(id, 1, rest @ _*)                    => EntityFactory.createHero(id, rest, 1)
+        case Array(id, 2, rest @ _*)                    => EntityFactory.createHero(id, rest, 2)
+        case Array(id, 0, rest @ _*)                    => EntityFactory.createEnemy(id, rest)
       })
       .toMap
 
