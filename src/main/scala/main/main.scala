@@ -5,7 +5,6 @@ import scala.io.StdIn._
 @inline final case class Vec2(x: Int, y: Int) {
   @inline def unary_- = Vec2(-x, -y)
   @inline def abs = Vec2(Math.abs(x), Math.abs(y))
-  @inline def psum = x + y
 
   @inline def +(that: Vec2) = Vec2(x + that.x, y + that.y)
   @inline def +(that: Int) = Vec2(x + that, y + that)
@@ -13,20 +12,21 @@ import scala.io.StdIn._
   @inline def -(that: Int) = Vec2(x - that, y - that)
   @inline def *(a: Int) = Vec2(x * a, y * a)
   @inline def /(a: Int) = Vec2(x / a, y / a)
+  @inline def /(a: Double) = Vec2((x / a).toInt, (y / a).toInt)
   @inline def dot(that: Vec2) = x * that.x + y * that.y
   @inline def cross(that: Vec2) = x * that.y - y * that.x
 
   @inline def lengthSq = x * x + y * y
   @inline def length = Math.sqrt(lengthSq)
   @inline def normalized = this / length.toInt
-  @inline def truncate(size: Int) = this / size
+  @inline def truncate(size: Int) = this / (length / size)
   @inline def area = x * y
   @inline def normal = Vec2(y, -x)
   @inline def angle = Math.atan2(y, x)
   @inline def toTuple = (x, y)
 
   @inline def dist(that: Vec2) = (this - that).length
-  @inline def hamdist(that: Vec2) = (this - that).abs.psum
+  @inline def distSq(that: Vec2) = (this - that).lengthSq
   @inline def bound = 0 <= x && x <= 17630 && 0 <= y && y <= 9000
 }
 
@@ -38,7 +38,7 @@ object Vec2 {
 }
 
 case class Nexus(health: Int, mana: Int, pos: Vec2) {
-  def isNear(v: Vec2) = pos.hamdist(v) <= 5000 && pos.dist(v) <= 5000
+  def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
   def dirVec(p: Vec2) = (pos - p).truncate(400)
 }
 
