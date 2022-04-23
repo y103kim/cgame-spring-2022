@@ -1,6 +1,10 @@
+package main
+
 import math._
 import scala.util._
 import scala.io.StdIn._
+import scala.annotation.tailrec
+import scala.collection.immutable.Queue
 
 @inline final case class Vec2(x: Int, y: Int) {
   @inline def unary_- = Vec2(-x, -y)
@@ -72,7 +76,33 @@ class EntityPool(
 
   def createEnemy(id: Int, data: Seq[Int]) = {
     val Seq(x, y, shield, _, _, vx, vy, _*) = data
-    (id, Enemy(id, Vec2(x, y), Vec2(vx, vy)))
+    val vPos = Vec2(x, y)
+    val vVel = Vec2(vx, vy)
+
+    def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
+      @tailrec
+      def getTrajR(
+          curr: Vec2,
+          vel: Vec2,
+          q: Queue[(Vec2, Vec2)],
+          tf: Int
+      ): (Queue[(Vec2, Vec2)], Int) = {
+        if (!curr.bound)
+          (q, tf)
+        else if (GS.myNexus.isNear(curr + vel)) {
+          val newVel = GS.myNexus.dirVec(curr + vel)
+          getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
+        } else if (GS.oppNexus.isNear(curr + vel)) {
+          val newVel = GS.oppNexus.dirVec(curr + vel)
+          getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
+        } else
+          getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
+      }
+      getTrajR(curr, vel, Queue(), 0)
+    }
+
+    val (trajactory, threatFor) = getTraj(vPos, vVel)
+    (id, Enemy(id, vPos, vVel))
   }
 
   def regen() = {
