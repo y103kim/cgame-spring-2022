@@ -18,7 +18,7 @@ import scala.io.StdIn._
 
   @inline def lengthSq = x * x + y * y
   @inline def length = Math.sqrt(lengthSq)
-  @inline def normalized = this / length.toLong
+  @inline def normalized = this / length.toInt
   @inline def truncate(size: Int) = this / size
   @inline def area = x * y
   @inline def normal = Vec2(y, -x)
@@ -33,21 +33,46 @@ object Vec2 {
   @inline def apply(x: Int, y: Int) = new Vec2(x, y)
   @inline def apply(tuple: (Int, Int)) = new Vec2(tuple._1, tuple._2)
   @inline def apply(x: Int) = new Vec2(x, x)
+  @inline def apply() = new Vec2(0, 0)
+}
+
+case class Nexus(health: Int, mana: Int);
+
+object GameStatus {
+  var myNexus = Nexus(3, 0)
+  var myPos = Vec2(0, 0)
+  var oppNexus = Nexus(3, 0)
+  var oppPos = Vec2(17630, 9000)
+
+  def print() = {
+    Console.err.println((myNexus, myPos, oppNexus, oppPos))
+  }
+}
+
+object Game extends App {
+  def initNexus() = {
+    val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
+    val heroesPerPlayer = readLine.toInt
+    if (baseX != 0) {
+      GameStatus.myPos = GameStatus.oppPos;
+      GameStatus.oppPos = Vec2()
+    }
+  }
+
+  def updateNexusStatus() = {
+    val Array(h1, m1) = (readLine split " ").filter(_ != "").map(_.toInt)
+    GameStatus.myNexus = Nexus(h1, m1)
+    val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
+    GameStatus.oppNexus = Nexus(h2, m2)
+  }
 }
 
 object Player extends App {
-  // baseX: The corner of the map representing your base
-  val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
-  val heroesPerPlayer = readLine.toInt // Always 3
-
+  Game.initNexus()
   // game loop
   while (true) {
-    for (i <- 0 until 2) {
-      // health: Each player's base health
-      // mana: Ignore in the first league; Spend ten mana to cast a spell
-      val Array(health, mana) =
-        (readLine split " ").filter(_ != "").map(_.toInt)
-    }
+    Game.updateNexusStatus()
+    GameStatus.print()
     val entityCount = readLine.toInt // Amount of heros and monsters you can see
     for (i <- 0 until entityCount) {
       // id: Unique identifier
@@ -73,7 +98,7 @@ object Player extends App {
         threatFor
       ) = (readLine split " ").filter(_ != "").map(_.toInt)
     }
-    for (i <- 0 until heroesPerPlayer) {
+    for (i <- 0 until 3) {
 
       // Write an action using println
       // To debug: Console.err.println("Debug messages...")
