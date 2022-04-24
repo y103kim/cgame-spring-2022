@@ -188,7 +188,7 @@ class EntityFactory(val gs: GameStatus) {
           q: Queue[(Vec2, Vec2)],
           tf: Int
       ): (Queue[(Vec2, Vec2)], Int) = {
-        if (!curr.bound)
+        if (!curr.bound || curr == Vec2() || curr == Vec2(17630, 9000))
           (q, tf)
         else if (gs.myNexus.isNear(curr + vel)) {
           val newVel = gs.myNexus.dirVec(curr + vel)
