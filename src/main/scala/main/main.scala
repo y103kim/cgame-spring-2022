@@ -103,7 +103,7 @@ case class Enemy(
     threatFor: Int
 ) extends Entity(id, vPos, vVel) {
 
-  override def validate(e: EntityInput) = vPos == e.vPos
+  override def validate(e: EntityInput) = vPos == e.vPos && vVel == e.vVel && health == e.health
 
   override def takeTurn(): Enemy = {
     val (newPos, newVel) = trajactory.tail.head
@@ -225,10 +225,12 @@ object Game {
     val t0 = System.nanoTime()
 
     val pool = gs.pool.regen(factory, inputData)
+    pool.print()
     var heros = pool.myHeros
     val heroIds = heros.map(_.id).sorted
     val st = if (gs.isL) startingL else startingR
     val moves = mutable.Map[Int, Vec2]().addAll(heroIds.zip(st))
+    val ctrls = mutable.Map[Int, Int]()
     val dangers = pool.enemies
       .filter(_.threatFor == 1)
       .sortBy(_.trajactory.size)
@@ -237,6 +239,14 @@ object Game {
     dangers.foreach(e => {
       heros = heros.sortBy(h => h.vPos.distSq(e.vPos))
       moves(heros.head.id) = e.shortest(heros.head.vPos).map(_._1).getOrElse(e.vPos)
+      if (
+        heros.head.vPos.distSq(e.vPos) <= 2200 * 2200 &&
+        myNexus.status.mana >= 30 &&
+        e.health > 10
+      ) {
+        moves.remove(heros.head.id)
+        ctrls(heros.head.id) = e.id
+      }
       heros = heros.tail
     })
 
@@ -244,7 +254,10 @@ object Game {
 
     // decide heros' movements
     for (i <- heroIds)
-      println(s"MOVE ${moves(i).x} ${moves(i).y}")
+      if (moves.contains(i))
+        println(s"MOVE ${moves(i).x} ${moves(i).y}")
+      else
+        println(s"SPELL CONTROL ${ctrls(i)} ${gs.oppNexus.pos.x} ${gs.oppNexus.pos.y}")
 
     val t1 = System.nanoTime()
     val elapsed = (t1 - t0) / 1000000.0
