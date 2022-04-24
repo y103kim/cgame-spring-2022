@@ -90,12 +90,15 @@ class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
 }
 
 case class Hero(override val id: Int, override val vPos: Vec2, override val owner: Int)
-    extends Entity(id, vPos, Vec2(), owner)
+    extends Entity(id, vPos, Vec2(), owner) {
+  override def validate(e: EntityInput) = false
+}
 
 case class Enemy(
     override val id: Int,
     override val vPos: Vec2,
     override val vVel: Vec2,
+    health: Int,
     trajactory: Queue[(Vec2, Vec2)],
     threatFor: Int
 ) extends Entity(id, vPos, vVel) {
@@ -104,8 +107,14 @@ case class Enemy(
 
   override def takeTurn(): Enemy = {
     val (newPos, newVel) = trajactory.tail.head
-    new Enemy(id, newPos, newVel, trajactory.tail, threatFor)
+    new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor)
   }
+
+  def shortest(vHero: Vec2) =
+    trajactory
+      .map(_._1)
+      .zipWithIndex
+      .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
   override def toString() =
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
@@ -184,7 +193,7 @@ class EntityFactory(val gs: GameStatus) {
     }
 
     val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
-    Enemy(e.id, e.vPos, e.vVel, trajactory, threatFor)
+    Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor)
   }
 }
 
@@ -226,8 +235,8 @@ object Game {
       .take(3)
 
     dangers.foreach(e => {
-      heros = heros.sortBy(h => h.vPos.dist(e.vPos))
-      moves(heros.head.id) = e.vPos
+      heros = heros.sortBy(h => h.vPos.distSq(e.vPos))
+      moves(heros.head.id) = e.shortest(heros.head.vPos).map(_._1).getOrElse(e.vPos)
       heros = heros.tail
     })
 
