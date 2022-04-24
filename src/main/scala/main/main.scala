@@ -42,6 +42,47 @@ object Vec2 {
   @inline def apply() = new Vec2(0, 0)
 }
 
+// Input and Output===============================================================================
+
+case class NexusPosInput(myNexusX: Int, myNexusY: Int)
+case class NexusStatus(health: Int, mana: Int)
+case class EntityInput(
+    id: Int,
+    _type: Int,
+    vPos: Vec2,
+    shieldLife: Int,
+    isControlled: Boolean,
+    health: Int,
+    vVel: Vec2,
+    nearBase: Boolean,
+    threatFor: Int
+)
+
+object InputHandler {
+  def handleNexusPos() = {
+    val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
+    val heroesPerPlayer = readLine.toInt
+    NexusPosInput(baseX, baseY)
+  }
+
+  def handleNexusStatus() = {
+    val Array(h1, m1) = (readLine split " ").filter(_ != "").map(_.toInt)
+    val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
+    (NexusStatus(h1, m1), NexusStatus(h2, m2))
+  }
+
+  def handleEntity() = {
+    val Array(id, _type, x, y, shieldLife, isControlled, health, vx, vy, nearBase, threatFor) =
+      (readLine split " ").filter(_ != "").map(_.toInt)
+    val vPos = Vec2(x, y)
+    val vVel = Vec2(vx, vy)
+    val ctrl = isControlled == 1
+    val nb = nearBase == 1
+    EntityInput(id, _type, vPos, shieldLife, ctrl, health, vVel, nb, threatFor)
+  }
+
+}
+
 // Domain =========================================================================================
 
 case class Nexus(health: Int, mana: Int, pos: Vec2) {
