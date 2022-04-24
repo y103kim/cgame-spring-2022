@@ -5,6 +5,8 @@ import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 import scala.collection.mutable
 
+// Vec2 ===========================================================================================
+
 @inline final case class Vec2(x: Int, y: Int) {
   @inline def unary_- = Vec2(-x, -y)
   @inline def abs = Vec2(Math.abs(x), Math.abs(y))
@@ -39,6 +41,8 @@ object Vec2 {
   @inline def apply(x: Int) = new Vec2(x, x)
   @inline def apply() = new Vec2(0, 0)
 }
+
+// Domain =========================================================================================
 
 case class Nexus(health: Int, mana: Int, pos: Vec2) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
@@ -161,6 +165,8 @@ class EntityPool(
   }
 }
 
+// Game ===========================================================================================
+
 object Game extends App {
   val DEBUG = false
   def initNexus() = {
@@ -210,6 +216,8 @@ object Game extends App {
     }
   }
 }
+
+// Player =========================================================================================
 
 object Player extends App {
   Game.initNexus()
