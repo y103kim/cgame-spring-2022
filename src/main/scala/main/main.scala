@@ -117,9 +117,7 @@ class EntityPool(
     val enemies: Seq[Enemy] = Seq()
 ) {
 
-  def regen(factory: EntityFactory) = {
-    val ec = readLine.toInt // Amount of heros and monsters you can see
-    val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
+  def regen(factory: EntityFactory, inputData: IndexedSeq[EntityInput]) = {
     val em = entityMap.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
@@ -215,33 +213,48 @@ object Game {
     (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
   }
 
+  def time[R](block: => R): R = {
+    val t0 = System.nanoTime()
+    val result = block // call-by-name
+    val t1 = System.nanoTime()
+    val elapsed = (t1 - t0) / 1000000.0
+    Console.err.println(s"Elapsed time: ${elapsed} ms")
+    result
+  }
+
   @tailrec
   def simulate(gs: GameStatus): Unit = {
     val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
     val factory = new EntityFactory(gs)
-    val pool = gs.pool.regen(factory)
-    var heros = pool.myHeros
-    val heroIds = pool.myHeros.map(_.id)
-    val moves = mutable.Map[Int, Vec2]()
-    val dangers = pool.enemies
-      .filter(_.threatFor == 1)
-      .sortBy(_.trajactory.size)
-      .take(3)
-      .foreach(e => {
-        heros = heros.sortBy(h => h.vPos.dist(e.vPos))
-        moves(heros.head.id) = e.vPos
-        heros = heros.tail
-      })
-    val newGs = GameStatus(myNexus, oppNexus, pool)
+    val ec = readLine.toInt
+    val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
 
-    // decide heros' movements
-    for (i <- heroIds)
-      if (moves.contains(i))
-        println(s"MOVE ${moves(i).x} ${moves(i).y}")
-      else if (gs.myNexus.pos.x == 0)
-        println(s"MOVE 3535 3535")
-      else
-        println(s"MOVE 14095 5465")
+    time {
+      val pool = gs.pool.regen(factory, inputData)
+      var heros = pool.myHeros
+      val heroIds = pool.myHeros.map(_.id)
+      val moves = mutable.Map[Int, Vec2]()
+      val dangers = pool.enemies
+        .filter(_.threatFor == 1)
+        .sortBy(_.trajactory.size)
+        .take(3)
+        .foreach(e => {
+          heros = heros.sortBy(h => h.vPos.dist(e.vPos))
+          moves(heros.head.id) = e.vPos
+          heros = heros.tail
+        })
+      val newGs = GameStatus(myNexus, oppNexus, pool)
+
+      // decide heros' movements
+      for (i <- heroIds)
+        if (moves.contains(i))
+          println(s"MOVE ${moves(i).x} ${moves(i).y}")
+        else if (gs.myNexus.pos.x == 0)
+          println(s"MOVE 3535 3535")
+        else
+          println(s"MOVE 14095 5465")
+    }
+
     simulate(gs)
   }
 
