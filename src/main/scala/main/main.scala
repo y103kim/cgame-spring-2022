@@ -126,14 +126,15 @@ class EntityPool(
 
   def regen() = {
     val ec = readLine.toInt // Amount of heros and monsters you can see
-    val inputData = (0 until ec).map(x => (readLine split " ").filter(_ != "").map(_.toInt))
+    val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
     val em = entityMap.mapValues(_.takeTurn())
+    def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate()
     val newEntityMap = inputData
       .map(_ match {
-        case Array(id, _, rest @ _*) if em.contains(id) => em(id).validate(rest)
-        case Array(id, 1, rest @ _*)                    => EntityFactory.createHero(id, rest, 1)
-        case Array(id, 2, rest @ _*)                    => EntityFactory.createHero(id, rest, 2)
-        case Array(id, 0, rest @ _*)                    => EntityFactory.createEnemy(id, rest)
+        case e: EntityInput if check(e)     => (e.id, em(e.id))
+        case e: EntityInput if e._type == 1 => EntityFactory.createHero(e)
+        case e: EntityInput if e._type == 2 => EntityFactory.createHero(e)
+        case e: EntityInput if e._type == 0 => EntityFactory.createEnemy(e)
       })
       .toMap
 
@@ -171,7 +172,6 @@ object GS {
     Console.err.println((myNexus, oppNexus))
   }
 }
-
 
 // Factory ========================================================================================
 
