@@ -83,16 +83,18 @@ object InputHandler {
 
 }
 
-// Domain =========================================================================================
+// Game Status ====================================================================================
 
-case class Nexus(health: Int, mana: Int, pos: Vec2) {
+case class Nexus(pos: Vec2, status: NexusStatus) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
   def dirVec(p: Vec2) = (pos - p).truncate(400)
+  def withStatus(newStatus: NexusStatus) =
+    Nexus(pos, newStatus)
 }
 
 object GS {
-  var myNexus = Nexus(3, 0, Vec2(0, 0))
-  var oppNexus = Nexus(3, 0, Vec2(17630, 9000))
+  var myNexus = Nexus(Vec2(0, 0), NexusStatus(3, 0))
+  var oppNexus = Nexus(Vec2(17630, 9000), NexusStatus(3, 0))
 
   def print() = {
     Console.err.println((myNexus, oppNexus))
@@ -103,6 +105,8 @@ class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2) {
   def validate(data: Seq[Int]) = (id, this)
   def takeTurn() = this
 }
+
+// Entity =========================================================================================
 
 case class Hero(override val id: Int, override val vPos: Vec2, owner: Int)
     extends Entity(id, vPos, Vec2())
@@ -211,9 +215,8 @@ class EntityPool(
 object Game extends App {
   val DEBUG = false
   def initNexus() = {
-    val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
-    val heroesPerPlayer = readLine.toInt
-    if (baseX != 0) {
+    val nexusPos = InputHandler.handleNexusPos()
+    if (nexusPos.myNexusX != 0) {
       val temp = GS.myNexus
       GS.myNexus = GS.oppNexus;
       GS.oppNexus = temp
@@ -221,10 +224,9 @@ object Game extends App {
   }
 
   def updateNexusStatus() = {
-    val Array(h1, m1) = (readLine split " ").filter(_ != "").map(_.toInt)
-    GS.myNexus = Nexus(h1, m1, GS.myNexus.pos)
-    val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
-    GS.oppNexus = Nexus(h2, m2, GS.oppNexus.pos)
+    val (sMy, sOpp) = InputHandler.handleNexusStatus()
+    GS.myNexus = GS.myNexus.withStatus(sMy)
+    GS.oppNexus = GS.oppNexus.withStatus(sOpp)
   }
 
   def loop() = {
