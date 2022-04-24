@@ -85,7 +85,7 @@ object InputHandler {
 // Entity =========================================================================================
 
 class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2) {
-  def validate(data: Seq[Int]) = (id, this)
+  def validate(e: EntityInput) = true
   def takeTurn() = this
 }
 
@@ -100,13 +100,7 @@ case class Enemy(
     threatFor: Int
 ) extends Entity(id, vPos, vVel) {
 
-  override def validate(data: Seq[Int]): (Int, Entity) = {
-    val Seq(x, y, shield, _, _, vx, vy, _, tf) = data
-    if (vPos != Vec2(x, y))
-      return EntityFactory.createEnemy(id, data)
-    else
-      return (id, this)
-  }
+  override def validate(e: EntityInput) = vPos == e.vPos
 
   override def takeTurn(): Enemy = {
     val (newPos, newVel) = trajactory.tail.head
@@ -123,17 +117,15 @@ class EntityPool(
     val enemies: Seq[Enemy] = Seq()
 ) {
 
-  def regen() = {
+  def regen(factory: EntityFactory) = {
     val ec = readLine.toInt // Amount of heros and monsters you can see
     val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
     val em = entityMap.mapValues(_.takeTurn())
-    def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate()
+    def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
       .map(_ match {
-        case e: EntityInput if check(e)     => (e.id, em(e.id))
-        case e: EntityInput if e._type == 1 => EntityFactory.createHero(e)
-        case e: EntityInput if e._type == 2 => EntityFactory.createHero(e)
-        case e: EntityInput if e._type == 0 => EntityFactory.createEnemy(e)
+        case e: EntityInput if check(e) => (e.id, em(e.id))
+        case e: EntityInput             => factory.create(e)
       })
       .toMap
 
@@ -171,17 +163,16 @@ case class GameStatus(
 
 // Factory ========================================================================================
 
-object EntityFactory {
-  def createHero(id: Int, data: Seq[Int], owner: Int) = {
-    val Seq(x, y, shield, ctrl, _*) = data
-    (id, Hero(id, Vec2(x, y), owner))
+class EntityFactory(val gs: GameStatus) {
+  def create(e: EntityInput) = e match {
+    case e if e._type == 0 => (e.id, createEnemy(e))
+    case e                 => (e.id, createHero(e))
   }
 
-  def createEnemy(id: Int, data: Seq[Int]) = {
-    val Seq(x, y, shield, _, _, vx, vy, _*) = data
-    val vPos = Vec2(x, y)
-    val vVel = Vec2(vx, vy)
+  def createHero(e: EntityInput) =
+    Hero(e.id, e.vPos, e._type)
 
+  def createEnemy(e: EntityInput) = {
     def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
       @tailrec
       def getTrajR(
@@ -192,11 +183,11 @@ object EntityFactory {
       ): (Queue[(Vec2, Vec2)], Int) = {
         if (!curr.bound)
           (q, tf)
-        else if (GS.myNexus.isNear(curr + vel)) {
-          val newVel = GS.myNexus.dirVec(curr + vel)
+        else if (gs.myNexus.isNear(curr + vel)) {
+          val newVel = gs.myNexus.dirVec(curr + vel)
           getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
-        } else if (GS.oppNexus.isNear(curr + vel)) {
-          val newVel = GS.oppNexus.dirVec(curr + vel)
+        } else if (gs.oppNexus.isNear(curr + vel)) {
+          val newVel = gs.oppNexus.dirVec(curr + vel)
           getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
         } else
           getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
@@ -204,8 +195,8 @@ object EntityFactory {
       getTrajR(curr, vel, Queue(), 0)
     }
 
-    val (trajactory, threatFor) = getTraj(vPos, vVel)
-    (id, Enemy(id, vPos, vVel, trajactory, threatFor))
+    val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
+    Enemy(e.id, e.vPos, e.vVel, trajactory, threatFor)
   }
 }
 
@@ -227,7 +218,8 @@ object Game {
   @tailrec
   def simulate(gs: GameStatus): Unit = {
     val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
-    val pool = gs.pool.regen(gs)
+    val factory = new EntityFactory(gs)
+    val pool = gs.pool.regen(factory)
     var heros = pool.myHeros
     val heroIds = pool.myHeros.map(_.id)
     val moves = mutable.Map[Int, Vec2]()
