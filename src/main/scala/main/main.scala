@@ -84,13 +84,13 @@ object InputHandler {
 
 // Entity =========================================================================================
 
-class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2) {
+class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
   def validate(e: EntityInput) = true
   def takeTurn() = this
 }
 
-case class Hero(override val id: Int, override val vPos: Vec2, owner: Int)
-    extends Entity(id, vPos, Vec2())
+case class Hero(override val id: Int, override val vPos: Vec2, override val owner: Int)
+    extends Entity(id, vPos, Vec2(), owner)
 
 case class Enemy(
     override val id: Int,
@@ -107,15 +107,15 @@ case class Enemy(
     new Enemy(id, newPos, newVel, trajactory.tail, threatFor)
   }
 
-  override def toString() = s"E${id}, vPos=${vPos} vVel=${vVel} threatFor=${threatFor}"
+  override def toString() =
+    s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
 }
 
-class EntityPool(
-    val entityMap: Map[Int, Entity] = Map(),
-    val myHeros: Seq[Hero] = Seq(),
-    val oppHeros: Seq[Hero] = Seq(),
-    val enemies: Seq[Enemy] = Seq()
-) {
+class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
+  def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
+  val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
+  val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
+  val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
 
   def regen(factory: EntityFactory, inputData: IndexedSeq[EntityInput]) = {
     val em = entityMap.mapValues(_.takeTurn())
@@ -123,19 +123,10 @@ class EntityPool(
     val newEntityMap = inputData
       .map(_ match {
         case e: EntityInput if check(e) => (e.id, em(e.id))
-        case e: EntityInput             => factory.create(e)
+        case e: EntityInput             => (e.id, factory.create(e))
       })
       .toMap
-
-    def collectHero(owner: Int) = newEntityMap.values.collect {
-      case hero: Hero if hero.owner == owner => hero
-    }.toSeq
-
-    val newMyHeros = if (myHeros.size != 0) myHeros else collectHero(1)
-    val newOppHeros = if (oppHeros.size != 0) oppHeros else collectHero(2)
-    val enemies = newEntityMap.values.collect { case e: Enemy => e }.toSeq
-
-    new EntityPool(newEntityMap, newMyHeros, newOppHeros, enemies)
+    new EntityPool(newEntityMap)
   }
 
   def print() = {
@@ -163,12 +154,9 @@ case class GameStatus(
 
 class EntityFactory(val gs: GameStatus) {
   def create(e: EntityInput) = e match {
-    case e if e._type == 0 => (e.id, createEnemy(e))
-    case e                 => (e.id, createHero(e))
+    case e if e._type == 0 => createEnemy(e)
+    case e                 => Hero(e.id, e.vPos, e._type)
   }
-
-  def createHero(e: EntityInput) =
-    Hero(e.id, e.vPos, e._type)
 
   def createEnemy(e: EntityInput) = {
     def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
@@ -232,18 +220,26 @@ object Game {
     time {
       val pool = gs.pool.regen(factory, inputData)
       var heros = pool.myHeros
-      val heroIds = pool.myHeros.map(_.id)
+      val heroIds = heros.map(_.id).sorted
       val moves = mutable.Map[Int, Vec2]()
       val dangers = pool.enemies
         .filter(_.threatFor == 1)
         .sortBy(_.trajactory.size)
         .take(3)
-        .foreach(e => {
-          heros = heros.sortBy(h => h.vPos.dist(e.vPos))
-          moves(heros.head.id) = e.vPos
-          heros = heros.tail
-        })
+
+      dangers.foreach(e => {
+        heros = heros.sortBy(h => h.vPos.dist(e.vPos))
+        moves(heros.head.id) = e.vPos
+        heros = heros.tail
+      })
       val newGs = GameStatus(myNexus, oppNexus, pool)
+
+      if (DEBUG) {
+        Console.err.println(heros)
+        Console.err.println(moves)
+        Console.err.println(dangers)
+        pool.entityMap.foreach(Console.err.println)
+      }
 
       // decide heros' movements
       for (i <- heroIds)
