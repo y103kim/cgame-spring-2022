@@ -106,8 +106,12 @@ case class Enemy(
   override def validate(e: EntityInput) = vPos == e.vPos && vVel == e.vVel && health == e.health
 
   override def takeTurn(): Enemy = {
-    val (newPos, newVel) = trajactory.tail.head
-    new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor)
+    if (trajactory.size == 1) {
+      this
+    } else {
+      val (newPos, newVel) = trajactory.tail.head
+      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor)
+    }
   }
 
   def shortest(vHero: Vec2) =
