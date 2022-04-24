@@ -44,7 +44,6 @@ object Vec2 {
 
 // Input and Output===============================================================================
 
-case class NexusPosInput(myNexusX: Int, myNexusY: Int)
 case class NexusStatus(health: Int, mana: Int)
 case class EntityInput(
     id: Int,
@@ -62,7 +61,7 @@ object InputHandler {
   def handleNexusPos() = {
     val Array(baseX, baseY) = (readLine split " ").filter(_ != "").map(_.toInt)
     val heroesPerPlayer = readLine.toInt
-    NexusPosInput(baseX, baseY)
+    Vec2(baseX, baseY)
   }
 
   def handleNexusStatus() = {
@@ -157,21 +156,18 @@ class EntityPool(
 
 // Game Status ====================================================================================
 
-case class Nexus(pos: Vec2, status: NexusStatus) {
+case class Nexus(pos: Vec2, status: NexusStatus = NexusStatus(3, 0)) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
   def dirVec(p: Vec2) = (pos - p).truncate(400)
   def withStatus(newStatus: NexusStatus) =
     Nexus(pos, newStatus)
 }
 
-object GS {
-  var myNexus = Nexus(Vec2(0, 0), NexusStatus(3, 0))
-  var oppNexus = Nexus(Vec2(17630, 9000), NexusStatus(3, 0))
-
-  def print() = {
-    Console.err.println((myNexus, oppNexus))
-  }
-}
+case class GameStatus(
+    val myNexus: Nexus,
+    val oppNexus: Nexus,
+    val pool: EntityPool = new EntityPool
+)
 
 // Factory ========================================================================================
 
@@ -218,54 +214,54 @@ object EntityFactory {
 object Game {
   val DEBUG = false
   def initNexus() = {
-    val nexusPos = InputHandler.handleNexusPos()
-    if (nexusPos.myNexusX != 0) {
-      val temp = GS.myNexus
-      GS.myNexus = GS.oppNexus;
-      GS.oppNexus = temp
-    }
+    val myPos = InputHandler.handleNexusPos()
+    val oppPos = if (myPos.x == 0) Vec2(17630, 9000) else Vec2(0, 0)
+    (Nexus(myPos), Nexus(oppPos))
   }
 
-  def updateNexusStatus() = {
+  def updateNexusStatus(gs: GameStatus) = {
     val (sMy, sOpp) = InputHandler.handleNexusStatus()
-    GS.myNexus = GS.myNexus.withStatus(sMy)
-    GS.oppNexus = GS.oppNexus.withStatus(sOpp)
+    (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
   }
 
-  def loop() = {
-    var pool = new EntityPool
-    while (true) {
-      Game.updateNexusStatus()
-      GS.print()
-      pool = pool.regen()
-      if (DEBUG) pool.print()
-      var heros = pool.myHeros
-      val heroIds = pool.myHeros.map(_.id)
-      val moves = mutable.Map[Int, Vec2]()
-      val dangers = pool.enemies
-        .filter(_.threatFor == 1)
-        .sortBy(_.trajactory.size)
-        .take(3)
-        .foreach(e => {
-          heros = heros.sortBy(h => h.vPos.dist(e.vPos))
-          moves(heros.head.id) = e.vPos
-          heros = heros.tail
-        })
+  @tailrec
+  def simulate(gs: GameStatus): Unit = {
+    val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
+    val pool = gs.pool.regen(gs)
+    var heros = pool.myHeros
+    val heroIds = pool.myHeros.map(_.id)
+    val moves = mutable.Map[Int, Vec2]()
+    val dangers = pool.enemies
+      .filter(_.threatFor == 1)
+      .sortBy(_.trajactory.size)
+      .take(3)
+      .foreach(e => {
+        heros = heros.sortBy(h => h.vPos.dist(e.vPos))
+        moves(heros.head.id) = e.vPos
+        heros = heros.tail
+      })
+    val newGs = GameStatus(myNexus, oppNexus, pool)
 
-      for (i <- heroIds)
-        if (moves.contains(i))
-          println(s"MOVE ${moves(i).x} ${moves(i).y}")
-        else if (GS.myNexus.pos.x == 0)
-          println(s"MOVE 3535 3535")
-        else
-          println(s"MOVE 14095 5465")
-    }
+    // decide heros' movements
+    for (i <- heroIds)
+      if (moves.contains(i))
+        println(s"MOVE ${moves(i).x} ${moves(i).y}")
+      else if (gs.myNexus.pos.x == 0)
+        println(s"MOVE 3535 3535")
+      else
+        println(s"MOVE 14095 5465")
+    simulate(gs)
+  }
+
+  def main() = {
+    val (myNexus, oppNexus) = Game.initNexus()
+    var gs = GameStatus(myNexus, oppNexus)
+    simulate(gs)
   }
 }
 
 // Player =========================================================================================
 
 object Player extends App {
-  Game.initNexus()
-  Game.loop()
+  Game.main()
 }
