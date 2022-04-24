@@ -83,30 +83,12 @@ object InputHandler {
 
 }
 
-// Game Status ====================================================================================
-
-case class Nexus(pos: Vec2, status: NexusStatus) {
-  def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
-  def dirVec(p: Vec2) = (pos - p).truncate(400)
-  def withStatus(newStatus: NexusStatus) =
-    Nexus(pos, newStatus)
-}
-
-object GS {
-  var myNexus = Nexus(Vec2(0, 0), NexusStatus(3, 0))
-  var oppNexus = Nexus(Vec2(17630, 9000), NexusStatus(3, 0))
-
-  def print() = {
-    Console.err.println((myNexus, oppNexus))
-  }
-}
+// Entity =========================================================================================
 
 class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2) {
   def validate(data: Seq[Int]) = (id, this)
   def takeTurn() = this
 }
-
-// Entity =========================================================================================
 
 case class Hero(override val id: Int, override val vPos: Vec2, owner: Int)
     extends Entity(id, vPos, Vec2())
@@ -133,44 +115,6 @@ case class Enemy(
   }
 
   override def toString() = s"E${id}, vPos=${vPos} vVel=${vVel} threatFor=${threatFor}"
-}
-
-object EntityFactory {
-  def createHero(id: Int, data: Seq[Int], owner: Int) = {
-    val Seq(x, y, shield, ctrl, _*) = data
-    (id, Hero(id, Vec2(x, y), owner))
-  }
-
-  def createEnemy(id: Int, data: Seq[Int]) = {
-    val Seq(x, y, shield, _, _, vx, vy, _*) = data
-    val vPos = Vec2(x, y)
-    val vVel = Vec2(vx, vy)
-
-    def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
-      @tailrec
-      def getTrajR(
-          curr: Vec2,
-          vel: Vec2,
-          q: Queue[(Vec2, Vec2)],
-          tf: Int
-      ): (Queue[(Vec2, Vec2)], Int) = {
-        if (!curr.bound)
-          (q, tf)
-        else if (GS.myNexus.isNear(curr + vel)) {
-          val newVel = GS.myNexus.dirVec(curr + vel)
-          getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
-        } else if (GS.oppNexus.isNear(curr + vel)) {
-          val newVel = GS.oppNexus.dirVec(curr + vel)
-          getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
-        } else
-          getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
-      }
-      getTrajR(curr, vel, Queue(), 0)
-    }
-
-    val (trajactory, threatFor) = getTraj(vPos, vVel)
-    (id, Enemy(id, vPos, vVel, trajactory, threatFor))
-  }
 }
 
 class EntityPool(
@@ -210,9 +154,68 @@ class EntityPool(
   }
 }
 
+// Game Status ====================================================================================
+
+case class Nexus(pos: Vec2, status: NexusStatus) {
+  def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
+  def dirVec(p: Vec2) = (pos - p).truncate(400)
+  def withStatus(newStatus: NexusStatus) =
+    Nexus(pos, newStatus)
+}
+
+object GS {
+  var myNexus = Nexus(Vec2(0, 0), NexusStatus(3, 0))
+  var oppNexus = Nexus(Vec2(17630, 9000), NexusStatus(3, 0))
+
+  def print() = {
+    Console.err.println((myNexus, oppNexus))
+  }
+}
+
+
+// Factory ========================================================================================
+
+object EntityFactory {
+  def createHero(id: Int, data: Seq[Int], owner: Int) = {
+    val Seq(x, y, shield, ctrl, _*) = data
+    (id, Hero(id, Vec2(x, y), owner))
+  }
+
+  def createEnemy(id: Int, data: Seq[Int]) = {
+    val Seq(x, y, shield, _, _, vx, vy, _*) = data
+    val vPos = Vec2(x, y)
+    val vVel = Vec2(vx, vy)
+
+    def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
+      @tailrec
+      def getTrajR(
+          curr: Vec2,
+          vel: Vec2,
+          q: Queue[(Vec2, Vec2)],
+          tf: Int
+      ): (Queue[(Vec2, Vec2)], Int) = {
+        if (!curr.bound)
+          (q, tf)
+        else if (GS.myNexus.isNear(curr + vel)) {
+          val newVel = GS.myNexus.dirVec(curr + vel)
+          getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
+        } else if (GS.oppNexus.isNear(curr + vel)) {
+          val newVel = GS.oppNexus.dirVec(curr + vel)
+          getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
+        } else
+          getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
+      }
+      getTrajR(curr, vel, Queue(), 0)
+    }
+
+    val (trajactory, threatFor) = getTraj(vPos, vVel)
+    (id, Enemy(id, vPos, vVel, trajactory, threatFor))
+  }
+}
+
 // Game ===========================================================================================
 
-object Game extends App {
+object Game {
   val DEBUG = false
   def initNexus() = {
     val nexusPos = InputHandler.handleNexusPos()
