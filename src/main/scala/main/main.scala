@@ -120,6 +120,18 @@ case class Enemy(
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
 }
 
+class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
+  def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
+  val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
+  val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
+  val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
+
+  def print() = {
+    Console.err.println(s"entities[${entityMap.size}]")
+    entityMap.foreach(Console.err.println)
+  }
+}
+
 // Commands =======================================================================================
 
 class Command
@@ -129,15 +141,13 @@ case class Wind(e: Enemy) extends Command
 case class Control(e: Enemy) extends Command
 case class Shield() extends Command
 
-// EntityPool =====================================================================================
-class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
-  def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
-  val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
-  val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
-  val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
+// Simulator ======================================================================================
 
-  def regen(factory: EntityFactory, inputData: IndexedSeq[EntityInput]) = {
-    val em = entityMap.mapValues(_.takeTurn())
+class Simulator(gs: GameStatus, inputData: IndexedSeq[EntityInput]) {
+  val factory = new EntityFactory(gs)
+
+  def sim() = {
+    val em = gs.pool.entityMap.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
       .map(_ match {
@@ -146,11 +156,6 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
       })
       .toMap
     new EntityPool(newEntityMap)
-  }
-
-  def print() = {
-    Console.err.println(s"entities[${entityMap.size}]")
-    entityMap.foreach(Console.err.println)
   }
 }
 
@@ -234,7 +239,8 @@ object Game {
 
     val t0 = System.nanoTime()
 
-    val pool = gs.pool.regen(factory, inputData)
+    val simulator = new Simulator(gs, inputData)
+    val pool = simulator.sim()
     pool.print()
     var heros = pool.myHeros
     val heroIds = heros.map(_.id).sorted
