@@ -120,6 +120,16 @@ case class Enemy(
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
 }
 
+// Commands =======================================================================================
+
+class Command
+case class Attack(e: Enemy) extends Command
+case class Move(pos: Vec2) extends Command
+case class Wind(e: Enemy) extends Command
+case class Control(e: Enemy) extends Command
+case class Shield() extends Command
+
+// EntityPool =====================================================================================
 class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
   def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
   val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
