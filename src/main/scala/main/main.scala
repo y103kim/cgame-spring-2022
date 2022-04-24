@@ -148,7 +148,9 @@ case class GameStatus(
     val myNexus: Nexus,
     val oppNexus: Nexus,
     val pool: EntityPool = new EntityPool
-)
+) {
+  def isL = myNexus.pos.x == 0
+}
 
 // Factory ========================================================================================
 
@@ -201,14 +203,8 @@ object Game {
     (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
   }
 
-  def time[R](block: => R): R = {
-    val t0 = System.nanoTime()
-    val result = block // call-by-name
-    val t1 = System.nanoTime()
-    val elapsed = (t1 - t0) / 1000000.0
-    Console.err.println(s"Elapsed time: ${elapsed} ms")
-    result
-  }
+  val startingL = List(Vec2(5000, 5000), Vec2(2100, 6000), Vec2(6000, 2100))
+  val startingR = startingL.map(Vec2(17630, 9000) - _)
 
   @tailrec
   def simulate(gs: GameStatus): Unit = {
@@ -217,41 +213,35 @@ object Game {
     val ec = readLine.toInt
     val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
 
-    time {
-      val pool = gs.pool.regen(factory, inputData)
-      var heros = pool.myHeros
-      val heroIds = heros.map(_.id).sorted
-      val moves = mutable.Map[Int, Vec2]()
-      val dangers = pool.enemies
-        .filter(_.threatFor == 1)
-        .sortBy(_.trajactory.size)
-        .take(3)
+    val t0 = System.nanoTime()
 
-      dangers.foreach(e => {
-        heros = heros.sortBy(h => h.vPos.dist(e.vPos))
-        moves(heros.head.id) = e.vPos
-        heros = heros.tail
-      })
-      val newGs = GameStatus(myNexus, oppNexus, pool)
+    val pool = gs.pool.regen(factory, inputData)
+    var heros = pool.myHeros
+    val heroIds = heros.map(_.id).sorted
+    val st = if (gs.isL) startingL else startingR
+    val moves = mutable.Map[Int, Vec2]().addAll(heroIds.zip(st))
+    val dangers = pool.enemies
+      .filter(_.threatFor == 1)
+      .sortBy(_.trajactory.size)
+      .take(3)
 
-      if (DEBUG) {
-        Console.err.println(heros)
-        Console.err.println(moves)
-        Console.err.println(dangers)
-        pool.entityMap.foreach(Console.err.println)
-      }
+    dangers.foreach(e => {
+      heros = heros.sortBy(h => h.vPos.dist(e.vPos))
+      moves(heros.head.id) = e.vPos
+      heros = heros.tail
+    })
 
-      // decide heros' movements
-      for (i <- heroIds)
-        if (moves.contains(i))
-          println(s"MOVE ${moves(i).x} ${moves(i).y}")
-        else if (gs.myNexus.pos.x == 0)
-          println(s"MOVE 3535 3535")
-        else
-          println(s"MOVE 14095 5465")
-    }
+    val newGs = GameStatus(myNexus, oppNexus, pool)
 
-    simulate(gs)
+    // decide heros' movements
+    for (i <- heroIds)
+      println(s"MOVE ${moves(i).x} ${moves(i).y}")
+
+    val t1 = System.nanoTime()
+    val elapsed = (t1 - t0) / 1000000.0
+    Console.err.println(s"Elapsed time: ${elapsed} ms")
+
+    simulate(newGs)
   }
 
   def main() = {
