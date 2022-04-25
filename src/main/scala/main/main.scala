@@ -147,20 +147,13 @@ case class Enemy(
 }
 
 class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
-  def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
-  val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
-  val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
-  val idToHero = myHeros.map(h => (h.id, h)).toMap
-  val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
-  val enemiesByDist = myHeros
-    .map(h => {
-      val d2ePairs = enemies.map(e => (e.vPos.distSq(h.vPos), e))
-      (h.id, d2ePairs.toSeq.sortBy(_._1))
-    })
-    .toMap
 
-  def nearEnemies(hero: Hero, dist: Int) =
-    enemiesByDist(hero.id).takeWhile(_._1 <= dist * dist)
+  def getEntities = {
+    def filter(owner: Int) = entityMap.filter(_._2.owner == owner)
+    val enemies: Map[Int, Enemy] = filter(0).asInstanceOf[Map[Int, Enemy]]
+    val heros: Map[Int, Hero] = filter(1).asInstanceOf[Map[Int, Hero]]
+    (heros, enemies)
+  }
 
   def print() = {
     Console.err.println(s"entities[${entityMap.size}]")
@@ -170,20 +163,44 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
 
 // Simulator ======================================================================================
 
-class Simulator(gs: GameStatus, inputData: IndexedSeq[EntityInput]) {
+class Simulator(gs: GameStatus, cmds: Map[Int, Command], inputData: IndexedSeq[EntityInput]) {
   val factory = new EntityFactory(gs)
 
-  def sim(cmds: Map[Int, Command]) = {
-    val em = gs.pool.entityMap.mapValues(_.takeTurn())
-    def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
-    val newEntityMap = inputData
-      .map(_ match {
-        case e: EntityInput if check(e)    => (e.id, em(e.id))
-        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e))
-        case e: EntityInput                => (e.id, factory.createEnemy(e))
-      })
-      .toMap
-    new EntityPool(newEntityMap)
+  def simulate() = {
+    var (heros, enemies) = gs.pool.getEntities
+    doControl(heros, enemies)
+  }
+
+  def doControl(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    doShield(heros, enemies)
+  }
+
+  def doShield(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    moveHeroes(heros, enemies)
+  }
+
+  def moveHeroes(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    performCombat(heros, enemies)
+  }
+
+  def performCombat(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    doPush(heros, enemies)
+  }
+
+  def doPush(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    moveMobs(heros, enemies)
+  }
+
+  def moveMobs(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    shieldDecay(heros, enemies)
+  }
+
+  def shieldDecay(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    validateWithInput(heros, enemies)
+  }
+
+  def validateWithInput(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+    gs
   }
 }
 
@@ -267,8 +284,8 @@ object Game {
 
     val t0 = System.nanoTime()
 
-    val simulator = new Simulator(gs, inputData)
-    val pool = simulator.sim(Map())
+    val simulator = new Simulator(gs)
+    val pool = simulator.sim(Map(), inputData)
     var heros = pool.myHeros
     val heroIds = heros.map(_.id).sorted
     val st = gs.starting
