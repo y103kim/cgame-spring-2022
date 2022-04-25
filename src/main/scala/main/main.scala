@@ -85,12 +85,21 @@ object InputHandler {
 // Commands =======================================================================================
 
 class Command
-case class Attack(e: Enemy) extends Command
-case class Move(pos: Vec2) extends Command
-case class Wind(e: Enemy) extends Command
-case class Control(e: Enemy) extends Command
-case class Shield() extends Command
-case object Wait extends Command
+case class Move(pos: Vec2) extends Command {
+  override def toString = s"MOVE ${pos.x} ${pos.y}"
+}
+case class Wind(dir: Vec2) extends Command {
+  override def toString = s"WIND ${dir.x} ${dir.y}"
+}
+case class Control(e: Enemy, dest: Vec2) extends Command {
+  override def toString = s"CONTROL ${e.id} ${dest.x} ${dest.y}"
+}
+case class Shield(e: Entity) extends Command {
+  override def toString = s"SHIELD ${e.id}"
+}
+case object Wait extends Command {
+  override def toString = s"WAIT"
+}
 
 // Entity =========================================================================================
 
@@ -141,6 +150,7 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
   def filter(owner: Int) = entityMap.values.filter(_.owner == owner)
   val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
   val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
+  val idToHero = myHeros.map(h => (h.id, h)).toMap
   val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
   val enemiesByDist = myHeros
     .map(h => {
