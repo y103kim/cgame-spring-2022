@@ -160,40 +160,42 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
 // Simulator ======================================================================================
 
 class Simulator(gs: GameStatus, cmds: Map[Int, Command], inputData: IndexedSeq[EntityInput]) {
+  type HMap = Map[Int, Hero]
+  type EMap = Map[Int, Enemy]
   val factory = new EntityFactory(gs)
 
   def simulate() =
     doControl(gs.pool.heros, gs.pool.enemies)
 
-  def doControl(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def doControl(heros: HMap, enemies: EMap) = {
     doShield(heros, enemies)
   }
 
-  def doShield(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def doShield(heros: HMap, enemies: EMap) = {
     moveHeroes(heros, enemies)
   }
 
-  def moveHeroes(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def moveHeroes(heros: HMap, enemies: EMap) = {
     performCombat(heros, enemies)
   }
 
-  def performCombat(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def performCombat(heros: HMap, enemies: EMap) = {
     doPush(heros, enemies)
   }
 
-  def doPush(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def doPush(heros: HMap, enemies: EMap) = {
     moveMobs(heros, enemies)
   }
 
-  def moveMobs(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def moveMobs(heros: HMap, enemies: EMap) = {
     shieldDecay(heros, enemies)
   }
 
-  def shieldDecay(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def shieldDecay(heros: HMap, enemies: EMap) = {
     validateWithInput(heros, enemies)
   }
 
-  def validateWithInput(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
+  def validateWithInput(heros: HMap, enemies: EMap) = {
     val em = heros ++ enemies.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
