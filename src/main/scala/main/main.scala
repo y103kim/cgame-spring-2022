@@ -82,6 +82,16 @@ object InputHandler {
 
 }
 
+// Commands =======================================================================================
+
+class Command
+case class Attack(e: Enemy) extends Command
+case class Move(pos: Vec2) extends Command
+case class Wind(e: Enemy) extends Command
+case class Control(e: Enemy) extends Command
+case class Shield() extends Command
+case object Wait extends Command
+
 // Entity =========================================================================================
 
 class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
@@ -89,8 +99,12 @@ class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
   def takeTurn() = this
 }
 
-case class Hero(override val id: Int, override val vPos: Vec2, override val owner: Int)
-    extends Entity(id, vPos, Vec2(), owner) {
+case class Hero(
+    override val id: Int,
+    override val vPos: Vec2,
+    override val owner: Int,
+    val cmd: Command
+) extends Entity(id, vPos, Vec2(), owner) {
   override def validate(e: EntityInput) = false
 }
 
@@ -136,27 +150,19 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
   }
 }
 
-// Commands =======================================================================================
-
-class Command
-case class Attack(e: Enemy) extends Command
-case class Move(pos: Vec2) extends Command
-case class Wind(e: Enemy) extends Command
-case class Control(e: Enemy) extends Command
-case class Shield() extends Command
-
 // Simulator ======================================================================================
 
 class Simulator(gs: GameStatus, inputData: IndexedSeq[EntityInput]) {
   val factory = new EntityFactory(gs)
 
-  def sim() = {
+  def sim(cmds: Map[Int, Command]) = {
     val em = gs.pool.entityMap.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
       .map(_ match {
-        case e: EntityInput if check(e) => (e.id, em(e.id))
-        case e: EntityInput             => (e.id, factory.create(e))
+        case e: EntityInput if check(e)    => (e.id, em(e.id))
+        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e, cmds))
+        case e: EntityInput                => (e.id, factory.createEnemy(e))
       })
       .toMap
     new EntityPool(newEntityMap)
@@ -178,15 +184,18 @@ case class GameStatus(
     val pool: EntityPool = new EntityPool
 ) {
   def isL = myNexus.pos.x == 0
+  def withPool(newPool: EntityPool) = GameStatus(myNexus, oppNexus, newPool)
+
+  val startingL = List(Vec2(5000, 5000), Vec2(2100, 6000), Vec2(6000, 2100))
+  val startingR = startingL.map(Vec2(17630, 9000) - _)
+  def starting = if (isL) startingL else startingR
 }
 
 // Factory ========================================================================================
 
 class EntityFactory(val gs: GameStatus) {
-  def create(e: EntityInput) = e match {
-    case e if e._type == 0 => createEnemy(e)
-    case e                 => Hero(e.id, e.vPos, e._type)
-  }
+  def createHero(e: EntityInput, cmds: Map[Int, Command]) =
+    Hero(e.id, e.vPos, e._type, cmds.getOrElse(e.id, Wait))
 
   def createEnemy(e: EntityInput) = {
     def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
@@ -231,9 +240,6 @@ object Game {
     (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
   }
 
-  val startingL = List(Vec2(5000, 5000), Vec2(2100, 6000), Vec2(6000, 2100))
-  val startingR = startingL.map(Vec2(17630, 9000) - _)
-
   @tailrec
   def simulate(gs: GameStatus): Unit = {
     val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
@@ -244,11 +250,10 @@ object Game {
     val t0 = System.nanoTime()
 
     val simulator = new Simulator(gs, inputData)
-    val pool = simulator.sim()
-    pool.print()
+    val pool = simulator.sim(Map())
     var heros = pool.myHeros
     val heroIds = heros.map(_.id).sorted
-    val st = if (gs.isL) startingL else startingR
+    val st = gs.starting
     val moves = mutable.Map[Int, Vec2]().addAll(heroIds.zip(st))
     val ctrls = mutable.Map[Int, Int]()
     val dangers = pool.enemies
