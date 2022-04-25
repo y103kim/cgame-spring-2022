@@ -123,17 +123,19 @@ case class Enemy(
     override val vVel: Vec2,
     health: Int,
     trajactory: Queue[(Vec2, Vec2)],
-    threatFor: Int
+    threatFor: Int,
+    isControlled: Boolean
 ) extends Entity(id, vPos, vVel) {
 
-  override def validate(e: EntityInput) = vPos == e.vPos && vVel == e.vVel && health == e.health
+  override def validate(e: EntityInput) =
+    isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
 
   override def takeTurn(): Enemy = {
     if (trajactory.size == 1) {
       this
     } else {
       val (newPos, newVel) = trajactory.tail.head
-      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor)
+      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor, false)
     }
   }
 
@@ -169,12 +171,15 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     doControl(gs.pool.heros, gs.pool.enemies)
 
   def doControl(heros: HMap, enemies: EMap) = {
-    def check(hid: Int, eid: Int) = heros(hid).distSq(enemies(eid)) <= 2200 * 2200
+    def check(hid: Int, eid: Int) = {
+      val enemy = enemies(eid)
+      !enemy.isControlled && heros(hid).distSq(enemy) <= 2200 * 2200
+    }
     val newEnemies = cmds
       .filter(_.isInstanceOf[Control])
       .collect {
         case Control(hid, eid, dest) if check(hid, eid) =>
-          (eid, factory.createEnemy(enemies(eid), dest.truncate(400)))
+          (eid, factory.createEnemy(enemies(eid), dest, true))
       }
     doShield(heros, enemies ++ newEnemies)
   }
@@ -269,12 +274,13 @@ class EntityFactory(val gs: GameStatus) {
 
   def createEnemy(e: EntityInput) = {
     val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
-    Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor)
+    Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor, false)
   }
 
-  def createEnemy(e: Enemy, vel: Vec2) = {
+  def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
+    val vel = (dest - e.vPos).truncate(400)
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
-    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor)
+    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled)
   }
 }
 
