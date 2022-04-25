@@ -147,13 +147,9 @@ case class Enemy(
 }
 
 class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
-
-  def getEntities = {
-    def filter(owner: Int) = entityMap.filter(_._2.owner == owner)
-    val enemies: Map[Int, Enemy] = filter(0).asInstanceOf[Map[Int, Enemy]]
-    val heros: Map[Int, Hero] = filter(1).asInstanceOf[Map[Int, Hero]]
-    (heros, enemies)
-  }
+  def filter(owner: Int) = entityMap.filter(_._2.owner == owner)
+  val enemies: Map[Int, Enemy] = filter(0).asInstanceOf[Map[Int, Enemy]]
+  val heros: Map[Int, Hero] = filter(1).asInstanceOf[Map[Int, Hero]]
 
   def print() = {
     Console.err.println(s"entities[${entityMap.size}]")
@@ -166,10 +162,8 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
 class Simulator(gs: GameStatus, cmds: Map[Int, Command], inputData: IndexedSeq[EntityInput]) {
   val factory = new EntityFactory(gs)
 
-  def simulate() = {
-    var (heros, enemies) = gs.pool.getEntities
-    doControl(heros, enemies)
-  }
+  def simulate() =
+    doControl(gs.pool.heros, gs.pool.enemies)
 
   def doControl(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
     doShield(heros, enemies)
@@ -200,7 +194,16 @@ class Simulator(gs: GameStatus, cmds: Map[Int, Command], inputData: IndexedSeq[E
   }
 
   def validateWithInput(heros: Map[Int, Hero], enemies: Map[Int, Enemy]) = {
-    gs
+    val em = heros ++ enemies.mapValues(_.takeTurn())
+    def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
+    val newEntityMap = inputData
+      .map(_ match {
+        case e: EntityInput if check(e)    => (e.id, em(e.id))
+        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e))
+        case e: EntityInput                => (e.id, factory.createEnemy(e))
+      })
+      .toMap
+    gs.withPool(new EntityPool(newEntityMap))
   }
 }
 
@@ -284,14 +287,15 @@ object Game {
 
     val t0 = System.nanoTime()
 
-    val simulator = new Simulator(gs)
-    val pool = simulator.sim(Map(), inputData)
-    var heros = pool.myHeros
-    val heroIds = heros.map(_.id).sorted
+    val simulator = new Simulator(gs, Map(), inputData)
+    val newGs = simulator.simulate()
+    val pool = newGs.pool
+    var heros = pool.heros.values.toSeq
+    val heroIds = pool.heros.keys.toSeq.sorted
     val st = gs.starting
     val moves = mutable.Map[Int, Vec2]().addAll(heroIds.zip(st))
     val ctrls = mutable.Map[Int, Int]()
-    val dangers = pool.enemies
+    val dangers = pool.enemies.values.toSeq
       .filter(_.threatFor == 1)
       .sortBy(_.trajactory.size)
       .take(3)
@@ -309,8 +313,6 @@ object Game {
       }
       heros = heros.tail
     })
-
-    val newGs = GameStatus(myNexus, oppNexus, pool)
 
     // decide heros' movements
     for (i <- heroIds)
