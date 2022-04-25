@@ -142,6 +142,15 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
   val enemies: Seq[Enemy] = filter(0).asInstanceOf[Seq[Enemy]]
   val myHeros: Seq[Hero] = filter(1).asInstanceOf[Seq[Hero]]
   val oppHeros: Seq[Hero] = filter(2).asInstanceOf[Seq[Hero]]
+  val enemiesByDist = myHeros
+    .map(h => {
+      val d2ePairs = enemies.map(e => (e.vPos.distSq(h.vPos), e))
+      (h.id, d2ePairs.toSeq.sortBy(_._1))
+    })
+    .toMap
+
+  def nearEnemies(hero: Hero, dist: Int) =
+    enemiesByDist(hero.id).takeWhile(_._1 <= dist * dist)
 
   def print() = {
     Console.err.println(s"entities[${entityMap.size}]")
