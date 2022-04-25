@@ -218,7 +218,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
         case e: EntityInput                => (e.id, factory.createEnemy(e))
       })
       .toMap
-    gs.withPool(new EntityPool(newEntityMap))
+    new EntityPool(newEntityMap)
   }
 }
 
@@ -239,8 +239,16 @@ case class GameStatus(
   def isL = myNexus.pos.x == 0
   def withPool(newPool: EntityPool) = GameStatus(myNexus, oppNexus, newPool)
 
-  val startingL = List(Vec2(5000, 5000), Vec2(2100, 6000), Vec2(6000, 2100))
-  val startingR = startingL.map(Vec2(17630, 9000) - _)
+  val startingL = Map(
+    0 -> Move(0, Vec2(5000, 5000)),
+    1 -> Move(1, Vec2(2100, 6000)),
+    2 -> Move(2, Vec2(6000, 2100))
+  )
+  val startingR = Map(
+    3 -> Move(3, Vec2(12630, 4000)),
+    4 -> Move(4, Vec2(11630, 6900)),
+    5 -> Move(5, Vec2(15530, 3000))
+  )
   def starting = if (isL) startingL else startingR
 }
 
@@ -299,8 +307,31 @@ object Game {
     (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
   }
 
+  def heuristic(gs: GameStatus): Seq[Command] = {
+    val pool = gs.pool
+    var heros = pool.heros.values.toSeq
+    val heroIds = pool.heros.keys.toSeq.sorted
+    val dangers = pool.enemies.values.toSeq
+      .filter(_.threatFor == 1)
+      .sortBy(_.trajactory.size)
+      .take(3)
+    val mana = gs.myNexus.status.mana
+
+    val cmds = dangers.map[Command](e => {
+      heros = heros.sortBy(h => h.vPos.distSq(e.vPos))
+      val hero = heros.head
+      heros = heros.tail
+      if (hero.distSq(e) <= 2200 * 2200 && mana >= 30 && e.health > 10) {
+        Control(hero.id, e.id, gs.oppNexus.pos)
+      } else {
+        Move(hero.id, e.shortest(hero.vPos).map(_._1).getOrElse(e.vPos))
+      }
+    })
+    cmds ++ heros.collect(h => gs.starting(h.id))
+  }
+
   @tailrec
-  def simulate(gs: GameStatus): Unit = {
+  def simulate(gs: GameStatus, cmds: Seq[Command]): Unit = {
     val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
     val factory = new EntityFactory(gs)
     val ec = readLine.toInt
@@ -308,51 +339,24 @@ object Game {
 
     val t0 = System.nanoTime()
 
-    val simulator = new Simulator(gs, Seq(), inputData)
-    val newGs = simulator.simulate()
-    val pool = newGs.pool
-    var heros = pool.heros.values.toSeq
-    val heroIds = pool.heros.keys.toSeq.sorted
-    val st = gs.starting
-    val moves = mutable.Map[Int, Vec2]().addAll(heroIds.zip(st))
-    val ctrls = mutable.Map[Int, Int]()
-    val dangers = pool.enemies.values.toSeq
-      .filter(_.threatFor == 1)
-      .sortBy(_.trajactory.size)
-      .take(3)
-
-    dangers.foreach(e => {
-      heros = heros.sortBy(h => h.vPos.distSq(e.vPos))
-      moves(heros.head.id) = e.shortest(heros.head.vPos).map(_._1).getOrElse(e.vPos)
-      if (
-        heros.head.vPos.distSq(e.vPos) <= 2200 * 2200 &&
-        myNexus.status.mana >= 30 &&
-        e.health > 10
-      ) {
-        moves.remove(heros.head.id)
-        ctrls(heros.head.id) = e.id
-      }
-      heros = heros.tail
-    })
-
-    // decide heros' movements
-    for (i <- heroIds)
-      if (moves.contains(i))
-        println(s"MOVE ${moves(i).x} ${moves(i).y}")
-      else
-        println(s"SPELL CONTROL ${ctrls(i)} ${gs.oppNexus.pos.x} ${gs.oppNexus.pos.y}")
+    val simulator = new Simulator(gs, cmds, inputData)
+    val pool = simulator.simulate()
+    val newGs = GameStatus(myNexus, oppNexus, pool)
+    val nextCmds = heuristic(newGs).sortBy(_.heroId)
+    nextCmds.foreach(println)
 
     val t1 = System.nanoTime()
     val elapsed = (t1 - t0) / 1000000.0
     Console.err.println(s"Elapsed time: ${elapsed} ms")
 
-    simulate(newGs)
+    simulate(newGs, nextCmds)
   }
 
   def main() = {
     val (myNexus, oppNexus) = Game.initNexus()
     var gs = GameStatus(myNexus, oppNexus)
-    simulate(gs)
+    val sCmd = gs.starting.keys.map(i => Wait(i)).toSeq
+    simulate(gs, sCmd)
   }
 }
 
