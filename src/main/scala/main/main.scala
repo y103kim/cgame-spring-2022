@@ -85,19 +85,19 @@ object InputHandler {
 // Commands =======================================================================================
 
 class Command
-case class Move(pos: Vec2) extends Command {
+case class Move(heroId: Int, pos: Vec2) extends Command {
   override def toString = s"MOVE ${pos.x} ${pos.y}"
 }
-case class Wind(dir: Vec2) extends Command {
+case class Wind(heroId: Int, dir: Vec2) extends Command {
   override def toString = s"WIND ${dir.x} ${dir.y}"
 }
-case class Control(e: Enemy, dest: Vec2) extends Command {
+case class Control(heroId: Int, enemyId: Int, dest: Vec2) extends Command {
   override def toString = s"CONTROL ${e.id} ${dest.x} ${dest.y}"
 }
-case class Shield(e: Entity) extends Command {
+case class Shield(heroId: Int, entityId: Int) extends Command {
   override def toString = s"SHIELD ${e.id}"
 }
-case object Wait extends Command {
+case class Wait(heroId: Int) extends Command {
   override def toString = s"WAIT"
 }
 
@@ -159,7 +159,7 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
 
 // Simulator ======================================================================================
 
-class Simulator(gs: GameStatus, cmds: Map[Int, Command], inputData: IndexedSeq[EntityInput]) {
+class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[EntityInput]) {
   type HMap = Map[Int, Hero]
   type EMap = Map[Int, Enemy]
   val factory = new EntityFactory(gs)
@@ -289,7 +289,7 @@ object Game {
 
     val t0 = System.nanoTime()
 
-    val simulator = new Simulator(gs, Map(), inputData)
+    val simulator = new Simulator(gs, Seq(), inputData)
     val newGs = simulator.simulate()
     val pool = newGs.pool
     var heros = pool.heros.values.toSeq
