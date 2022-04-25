@@ -106,6 +106,7 @@ case class Wait(heroId: Int) extends Command {
 class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
   def validate(e: EntityInput) = true
   def takeTurn() = this
+  @inline def distSq(that: Entity) = vPos.distSq(that.vPos)
 }
 
 case class Hero(
@@ -142,6 +143,9 @@ case class Enemy(
       .zipWithIndex
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
+  def withNewVel(newVel: Vec2) =
+    Enemy(id, vPos, newVel, health, trajactory, threatFor)
+
   override def toString() =
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
 }
@@ -168,7 +172,14 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     doControl(gs.pool.heros, gs.pool.enemies)
 
   def doControl(heros: HMap, enemies: EMap) = {
-    doShield(heros, enemies)
+    def check(hid: Int, eid: Int) = heros(hid).distSq(enemies(eid)) <= 2200 * 2200
+    val newEnemies = cmds
+      .filter(_.isInstanceOf[Control])
+      .collect {
+        case Control(hid, eid, dest) if check(hid, eid) =>
+          (eid, enemies(eid).withNewVel(dest.truncate(400)))
+      }
+    doShield(heros, enemies ++ newEnemies)
   }
 
   def doShield(heros: HMap, enemies: EMap) = {
