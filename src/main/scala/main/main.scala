@@ -102,8 +102,7 @@ class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
 case class Hero(
     override val id: Int,
     override val vPos: Vec2,
-    override val owner: Int,
-    val cmd: Command
+    override val owner: Int
 ) extends Entity(id, vPos, Vec2(), owner) {
   override def validate(e: EntityInput) = false
 }
@@ -161,7 +160,7 @@ class Simulator(gs: GameStatus, inputData: IndexedSeq[EntityInput]) {
     val newEntityMap = inputData
       .map(_ match {
         case e: EntityInput if check(e)    => (e.id, em(e.id))
-        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e, cmds))
+        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e))
         case e: EntityInput                => (e.id, factory.createEnemy(e))
       })
       .toMap
@@ -194,8 +193,8 @@ case class GameStatus(
 // Factory ========================================================================================
 
 class EntityFactory(val gs: GameStatus) {
-  def createHero(e: EntityInput, cmds: Map[Int, Command]) =
-    Hero(e.id, e.vPos, e._type, cmds.getOrElse(e.id, Wait))
+  def createHero(e: EntityInput) =
+    Hero(e.id, e.vPos, e._type)
 
   def createEnemy(e: EntityInput) = {
     def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
