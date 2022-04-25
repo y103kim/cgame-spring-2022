@@ -84,20 +84,20 @@ object InputHandler {
 
 // Commands =======================================================================================
 
-class Command
-case class Move(heroId: Int, pos: Vec2) extends Command {
+class Command(val heroId: Int)
+case class Move(override val heroId: Int, pos: Vec2) extends Command(heroId) {
   override def toString = s"MOVE ${pos.x} ${pos.y}"
 }
-case class Wind(heroId: Int, dir: Vec2) extends Command {
-  override def toString = s"WIND ${dir.x} ${dir.y}"
+case class Wind(override val heroId: Int, dir: Vec2) extends Command(heroId) {
+  override def toString = s"SPELL WIND ${dir.x} ${dir.y}"
 }
-case class Control(heroId: Int, enemyId: Int, dest: Vec2) extends Command {
-  override def toString = s"CONTROL ${e.id} ${dest.x} ${dest.y}"
+case class Control(override val heroId: Int, enemyId: Int, dest: Vec2) extends Command(heroId) {
+  override def toString = s"SPELL CONTROL ${enemyId} ${dest.x} ${dest.y}"
 }
-case class Shield(heroId: Int, entityId: Int) extends Command {
-  override def toString = s"SHIELD ${e.id}"
+case class Shield(override val heroId: Int, entityId: Int) extends Command(heroId) {
+  override def toString = s"SPELL SHIELD ${entityId}"
 }
-case class Wait(heroId: Int) extends Command {
+case class Wait(override val heroId: Int) extends Command(heroId) {
   override def toString = s"WAIT"
 }
 
