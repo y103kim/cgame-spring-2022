@@ -143,9 +143,6 @@ case class Enemy(
       .zipWithIndex
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
-  def withNewVel(newVel: Vec2) =
-    Enemy(id, vPos, newVel, health, trajactory, threatFor)
-
   override def toString() =
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
 }
@@ -177,7 +174,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
       .filter(_.isInstanceOf[Control])
       .collect {
         case Control(hid, eid, dest) if check(hid, eid) =>
-          (eid, enemies(eid).withNewVel(dest.truncate(400)))
+          (eid, factory.createEnemy(enemies(eid), dest.truncate(400)))
       }
     doShield(heros, enemies ++ newEnemies)
   }
@@ -248,31 +245,36 @@ class EntityFactory(val gs: GameStatus) {
   def createHero(e: EntityInput) =
     Hero(e.id, e.vPos, e._type)
 
-  def createEnemy(e: EntityInput) = {
-    def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
-      @tailrec
-      def getTrajR(
-          curr: Vec2,
-          vel: Vec2,
-          q: Queue[(Vec2, Vec2)],
-          tf: Int
-      ): (Queue[(Vec2, Vec2)], Int) = {
-        if (!curr.bound || curr == Vec2() || curr == Vec2(17630, 9000))
-          (q, tf)
-        else if (gs.myNexus.isNear(curr + vel)) {
-          val newVel = gs.myNexus.dirVec(curr + vel)
-          getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
-        } else if (gs.oppNexus.isNear(curr + vel)) {
-          val newVel = gs.oppNexus.dirVec(curr + vel)
-          getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
-        } else
-          getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
-      }
-      getTrajR(curr, vel, Queue(), 0)
+  def getTraj(curr: Vec2, vel: Vec2): (Queue[(Vec2, Vec2)], Int) = {
+    @tailrec
+    def getTrajR(
+        curr: Vec2,
+        vel: Vec2,
+        q: Queue[(Vec2, Vec2)],
+        tf: Int
+    ): (Queue[(Vec2, Vec2)], Int) = {
+      if (!curr.bound || curr == Vec2() || curr == Vec2(17630, 9000))
+        (q, tf)
+      else if (gs.myNexus.isNear(curr + vel)) {
+        val newVel = gs.myNexus.dirVec(curr + vel)
+        getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
+      } else if (gs.oppNexus.isNear(curr + vel)) {
+        val newVel = gs.oppNexus.dirVec(curr + vel)
+        getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
+      } else
+        getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
     }
+    getTrajR(curr, vel, Queue(), 0)
+  }
 
+  def createEnemy(e: EntityInput) = {
     val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
     Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor)
+  }
+
+  def createEnemy(e: Enemy, vel: Vec2) = {
+    val (trajactory, threatFor) = getTraj(e.vPos, vel)
+    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor)
   }
 }
 
