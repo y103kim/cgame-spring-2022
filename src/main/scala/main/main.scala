@@ -32,6 +32,8 @@ import scala.collection.mutable
   @inline def dist(that: Vec2) = (this - that).length
   @inline def distSq(that: Vec2) = (this - that).lengthSq
   @inline def bound = 0 <= x && x <= 17630 && 0 <= y && y <= 9000
+  @inline def truncate = Vec2(x.toInt, y.toInt)
+  @inline def symTruncate = (this - Vec2.CENTER).truncate + Vec2.CENTER
 }
 
 object Vec2 {
@@ -39,6 +41,7 @@ object Vec2 {
   @inline def apply(tuple: (Double, Double)) = new Vec2(tuple._1, tuple._2)
   @inline def apply(x: Double) = new Vec2(x, x)
   @inline def apply() = new Vec2(0, 0)
+  val CENTER = Vec2(17630 / 2, 9000 / 2)
 }
 
 // Input and Output===============================================================================
@@ -104,11 +107,12 @@ case class Wait(override val heroId: Int) extends Command(heroId) {
 
 class Entity(
     val id: Int,
-    val vPos: Vec2,
+    val vPosRaw: Vec2,
     val vVel: Vec2,
     val owner: Int = 0,
     val shieldLife: Int = 0
 ) {
+  val vPos: Vec2 = vPosRaw.symTruncate
   def validate(e: EntityInput) = true
   def takeTurn() = this
   @inline def distSq(that: Entity) = vPos.distSq(that.vPos)
@@ -116,10 +120,10 @@ class Entity(
 
 case class Hero(
     override val id: Int,
-    override val vPos: Vec2,
+    override val vPosRaw: Vec2,
     override val owner: Int,
     override val shieldLife: Int = 0
-) extends Entity(id, vPos, Vec2(), owner, shieldLife) {
+) extends Entity(id, vPosRaw, Vec2(), owner, shieldLife) {
   override def validate(e: EntityInput) = {
     val res = vPos == e.vPos
     if (!res) {
@@ -135,15 +139,14 @@ case class Hero(
 
 case class Enemy(
     override val id: Int,
-    override val vPos: Vec2,
+    override val vPosRaw: Vec2,
     override val vVel: Vec2,
     health: Int,
     trajactory: Queue[(Vec2, Vec2)],
     threatFor: Int,
     isControlled: Boolean,
     override val shieldLife: Int = 0
-) extends Entity(id, vPos, vVel) {
-
+) extends Entity(id, vPosRaw, vVel) {
   override def validate(e: EntityInput) =
     isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
 
