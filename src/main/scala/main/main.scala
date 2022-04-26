@@ -94,8 +94,8 @@ case class Wind(override val heroId: Int, dir: Vec2) extends Command(heroId) {
 case class Control(override val heroId: Int, enemyId: Int, dest: Vec2) extends Command(heroId) {
   override def toString = s"SPELL CONTROL ${enemyId} ${dest.x} ${dest.y}"
 }
-case class Shield(override val heroId: Int, entityId: Int) extends Command(heroId) {
-  override def toString = s"SPELL SHIELD ${entityId}"
+case class Shield(override val heroId: Int, enemyId: Int) extends Command(heroId) {
+  override def toString = s"SPELL SHIELD ${enemyId}"
 }
 case class Wait(override val heroId: Int) extends Command(heroId) {
   override def toString = s"WAIT"
@@ -103,7 +103,13 @@ case class Wait(override val heroId: Int) extends Command(heroId) {
 
 // Entity =========================================================================================
 
-class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
+class Entity(
+    val id: Int,
+    val vPos: Vec2,
+    val vVel: Vec2,
+    val owner: Int = 0,
+    val shieldLife: Int = 0
+) {
   def validate(e: EntityInput) = true
   def takeTurn() = this
   @inline def distSq(that: Entity) = vPos.distSq(that.vPos)
@@ -112,9 +118,11 @@ class Entity(val id: Int, val vPos: Vec2, val vVel: Vec2, val owner: Int = 0) {
 case class Hero(
     override val id: Int,
     override val vPos: Vec2,
-    override val owner: Int
-) extends Entity(id, vPos, Vec2(), owner) {
+    override val owner: Int,
+    override val shieldLife: Int = 0
+) extends Entity(id, vPos, Vec2(), owner, shieldLife) {
   override def validate(e: EntityInput) = false
+  def withShield() = Hero(id, vPos, owner, 12)
 }
 
 case class Enemy(
@@ -124,7 +132,8 @@ case class Enemy(
     health: Int,
     trajactory: Queue[(Vec2, Vec2)],
     threatFor: Int,
-    isControlled: Boolean
+    isControlled: Boolean,
+    override val shieldLife: Int = 0
 ) extends Entity(id, vPos, vVel) {
 
   override def validate(e: EntityInput) =
@@ -144,6 +153,8 @@ case class Enemy(
       .map(_._1)
       .zipWithIndex
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
+
+  def withShield() = Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
 
   override def toString() =
     s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
@@ -170,22 +181,30 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   def simulate() =
     doControl(gs.pool.heros, gs.pool.enemies)
 
+  def checkSpell(hero: Hero, enemy: Enemy) = {
+    val distSq = hero.distSq(enemy)
+    !enemy.isControlled && enemy.shieldLife == 0 && distSq <= 2200 * 2200
+  }
+
   def doControl(heros: HMap, enemies: EMap) = {
-    def check(hid: Int, eid: Int) = {
-      val enemy = enemies(eid)
-      !enemy.isControlled && heros(hid).distSq(enemy) <= 2200 * 2200
+    val newEnemies = cmds.collect {
+      case Control(hid, eid, dest) if checkSpell(heros(hid), enemies(eid)) =>
+        (eid, factory.createEnemy(enemies(eid), dest, true))
     }
-    val newEnemies = cmds
-      .filter(_.isInstanceOf[Control])
-      .collect {
-        case Control(hid, eid, dest) if check(hid, eid) =>
-          (eid, factory.createEnemy(enemies(eid), dest, true))
-      }
     doShield(heros, enemies ++ newEnemies)
   }
 
   def doShield(heros: HMap, enemies: EMap) = {
-    moveHeroes(heros, enemies)
+    // TODO: need to verify working
+    val newHeros = cmds.collect {
+      case Shield(hid, eid) if hid == eid =>
+        (hid, heros(hid).withShield())
+    }
+    val newEnemies = cmds.collect {
+      case Shield(hid, eid) if checkSpell(heros(hid), enemies(eid)) =>
+        (hid, enemies(eid).withShield())
+    }
+    moveHeroes(heros ++ newHeros, enemies ++ newEnemies)
   }
 
   def moveHeroes(heros: HMap, enemies: EMap) = {
