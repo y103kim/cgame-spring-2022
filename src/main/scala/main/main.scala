@@ -147,8 +147,15 @@ case class Enemy(
     isControlled: Boolean,
     override val shieldLife: Int = 0
 ) extends Entity(id, vPosRaw, vVel) {
-  override def validate(e: EntityInput) =
-    isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
+  override def validate(e: EntityInput) = {
+    val res = isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
+    if (!res) {
+      Console.err.println("Validation Fail for Enemy")
+      Console.err.println(s"  entity: ${this}")
+      Console.err.println(s"  input: ${e}")
+    }
+    res
+  }
 
   override def takeTurn(): Enemy = {
     if (trajactory.size == 1) {
