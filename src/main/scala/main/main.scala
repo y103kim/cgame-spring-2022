@@ -253,14 +253,21 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def performCombat(heros: HMap, opps: HMap, enemies: EMap) = {
-    val damaged = (heros ++ opps)
+    val (inBase, outBase) = heros.partition { case (_, hero) => gs.myNexus.isNear(hero.vPos) }
+    val damaged = (inBase ++ opps)
       .flatMap { case (id, hero) =>
         enemies.filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }.keys
       }
-    val newEnemies = damaged
+    val wildDamaged = outBase
+      .flatMap { case (id, hero) =>
+        enemies.filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }.keys
+      }
+    val newEnemies = (damaged ++ wildDamaged)
       .groupMapReduce(identity)(_ => 2)(_ + _)
       .map { case (id, damage) => (id, enemies(id).withDamage(damage)) }
-    doPush(heros, opps, enemies ++ newEnemies, (0, 0))
+    val wildLifeManaGained = wildDamaged.size * 2
+    val manaGained = damaged.size * 2 + wildLifeManaGained
+    doPush(heros, opps, enemies ++ newEnemies, (manaGained, wildLifeManaGained))
   }
 
   def doPush(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
@@ -320,8 +327,11 @@ case class GameStatus(
     GameStatus(myNexus, newS, oppNexus, oppStatus, newPool, newWildLifeMana)
   }
 
-  def withStatus(myS: Status, oppS: Status) =
+  def withStatus(myS: Status, oppS: Status) = {
+    if (myS.mana != myStatus.mana)
+      Console.err.println(s"mana validation fail: my=${myStatus} != ${myS}")
     GameStatus(myNexus, myS, oppNexus, oppS, pool, wildLifeMana)
+  }
 
   val startingL = Map(
     0 -> Move(0, Vec2(5000, 5000)),
@@ -415,9 +425,8 @@ object Game {
   }
 
   @tailrec
-  def processTurn(gsPrev: GameStatus, cmds: Seq[Command]): Unit = {
+  def processTurn(gs: GameStatus, cmds: Seq[Command]): Unit = {
     val (myStatus, oppStatus) = InputHandler.handleStatus
-    val gs = gsPrev.withStatus(myStatus, oppStatus)
     val factory = new EntityFactory(gs)
     val ec = readLine.toInt
     val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
@@ -426,14 +435,18 @@ object Game {
 
     val simulator = new Simulator(gs, cmds, inputData)
     val newGs = simulator.simulate()
+    val newGsWithStatus = newGs.withStatus(myStatus, oppStatus)
+
+    val t1 = System.nanoTime()
+    Console.err.println(s"simlatuion: ${(t1 - t0) / 1000000.0} ms")
+
     val nextCmds = heuristic(newGs).sortBy(_.heroId)
     nextCmds.foreach(println)
 
-    val t1 = System.nanoTime()
-    val elapsed = (t1 - t0) / 1000000.0
-    Console.err.println(s"Elapsed time: ${elapsed} ms")
+    val t2 = System.nanoTime()
+    Console.err.println(s"heuristic: ${(t2 - t1) / 1000000.0} ms")
 
-    processTurn(newGs, nextCmds)
+    processTurn(newGsWithStatus, nextCmds)
   }
 
   def main() = {
