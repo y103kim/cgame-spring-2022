@@ -161,10 +161,11 @@ case class Enemy(
 
   override def takeTurn(): Enemy = {
     if (trajactory.size == 1) {
+      // TODO: check nexus health damage
       this
     } else {
       val (newPos, newVel) = trajactory.tail.head
-      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor, false)
+      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor, isControlled)
     }
   }
 
@@ -174,10 +175,13 @@ case class Enemy(
       .zipWithIndex
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
-  def withShield() = Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
+  def withShield() =
+    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
+  def withDamaged() =
+    Enemy(id, vPos, vVel, health - 2, trajactory, threatFor, isControlled, shieldLife)
 
   override def toString() =
-    s"[E${id}] vPos=${vPos} vVel=${vVel} threatFor=${threatFor} owner=${owner}"
+    s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife}"
 }
 
 class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
@@ -241,7 +245,13 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def performCombat(heros: HMap, enemies: EMap) = {
-    doPush(heros, enemies, (0, 0))
+    val newEnemies = heros
+      .flatMap { case (id, hero) =>
+        enemies
+          .filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }
+          .mapValues(_.withDamaged())
+      }
+    doPush(heros, enemies ++ newEnemies, (0, 0))
   }
 
   def doPush(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
@@ -253,6 +263,10 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
+    // TODO
+    // shieldDecay
+    // cancel control
+    // remove enemies
     validateWithInput(heros, enemies, gained)
   }
 
@@ -345,7 +359,7 @@ class EntityFactory(val gs: GameStatus) {
   }
 
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
-    val vel = (dest - e.vPos).normalize(400)
+    val vel = (dest - e.vPos).normalize(400).truncate
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
     Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled)
   }
