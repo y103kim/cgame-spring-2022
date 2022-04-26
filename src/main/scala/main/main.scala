@@ -167,7 +167,7 @@ case class Enemy(
   }
 
   override def takeTurn(): Enemy = {
-    if (trajactory.size == 1) {
+    if (trajactory.size <= 1) {
       // TODO: check nexus health damage
       this
     } else {
@@ -210,8 +210,12 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   type EMap = Map[Int, Enemy]
   val factory = new EntityFactory(gs)
 
-  def simulate() =
-    doControl(gs.pool.heros, gs.pool.opps, gs.pool.enemies)
+  def simulate() = {
+    val newEnemies = inputData
+      .filter(e => e._type == 0 && !gs.pool.enemies.contains(e.id))
+      .map(e => (e.id, factory.createPrevEnemy(e)))
+    doControl(gs.pool.heros, gs.pool.opps, gs.pool.enemies ++ newEnemies)
+  }
 
   def checkSpell(hero: Hero, enemy: Enemy) = {
     val distSq = hero.distSq(enemy)
@@ -377,6 +381,12 @@ class EntityFactory(val gs: GameStatus) {
   def createEnemy(e: EntityInput) = {
     val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
     Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor, e.isControlled, e.shieldLife)
+  }
+
+  def createPrevEnemy(e: EntityInput) = {
+    val pos = e.vPos - e.vVel
+    val (trajactory, threatFor) = getTraj(pos, e.vVel)
+    Enemy(e.id, pos, e.vVel, e.health, trajactory, threatFor, e.isControlled, e.shieldLife)
   }
 
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
