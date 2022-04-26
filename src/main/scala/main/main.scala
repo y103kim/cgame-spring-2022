@@ -177,8 +177,8 @@ case class Enemy(
 
   def withShield() =
     Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
-  def withDamaged() =
-    Enemy(id, vPos, vVel, health - 2, trajactory, threatFor, isControlled, shieldLife)
+  def withDamage(damage: Int) =
+    Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
 
   override def toString() =
     s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife}"
@@ -188,6 +188,7 @@ class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
   def filter(owner: Int) = entityMap.filter(_._2.owner == owner)
   val enemies: Map[Int, Enemy] = filter(0).asInstanceOf[Map[Int, Enemy]]
   val heros: Map[Int, Hero] = filter(1).asInstanceOf[Map[Int, Hero]]
+  val opps: Map[Int, Hero] = filter(2).asInstanceOf[Map[Int, Hero]]
 
   def print() = {
     Console.err.println(s"entities[${entityMap.size}]")
@@ -203,22 +204,22 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   val factory = new EntityFactory(gs)
 
   def simulate() =
-    doControl(gs.pool.heros, gs.pool.enemies)
+    doControl(gs.pool.heros, gs.pool.opps, gs.pool.enemies)
 
   def checkSpell(hero: Hero, enemy: Enemy) = {
     val distSq = hero.distSq(enemy)
     !enemy.isControlled && enemy.shieldLife == 0 && distSq <= 2200 * 2200
   }
 
-  def doControl(heros: HMap, enemies: EMap) = {
+  def doControl(heros: HMap, opps: HMap, enemies: EMap) = {
     val newEnemies = cmds.collect {
       case Control(hid, eid, dest) if checkSpell(heros(hid), enemies(eid)) =>
         (eid, factory.createEnemy(enemies(eid), dest, true))
     }
-    doShield(heros, enemies ++ newEnemies)
+    doShield(heros, opps, enemies ++ newEnemies)
   }
 
-  def doShield(heros: HMap, enemies: EMap) = {
+  def doShield(heros: HMap, opps: HMap, enemies: EMap) = {
     // TODO: need to verify working
     val newHeros = cmds.collect {
       case Shield(hid, eid) if hid == eid =>
@@ -228,10 +229,10 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
       case Shield(hid, eid) if checkSpell(heros(hid), enemies(eid)) =>
         (hid, enemies(eid).withShield())
     }
-    moveHeroes(heros ++ newHeros, enemies ++ newEnemies)
+    moveHeroes(heros ++ newHeros, opps, enemies ++ newEnemies)
   }
 
-  def moveHeroes(heros: HMap, enemies: EMap) = {
+  def moveHeroes(heros: HMap, opps: HMap, enemies: EMap) = {
     val newHeros = cmds.collect {
       case Move(hid, dest) => {
         val hero = heros(hid)
@@ -241,36 +242,37 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
         (hid, heros(hid).withPos(newPos))
       }
     }
-    performCombat(heros ++ newHeros, enemies)
+    performCombat(heros ++ newHeros, opps, enemies)
   }
 
-  def performCombat(heros: HMap, enemies: EMap) = {
-    val newEnemies = heros
+  def performCombat(heros: HMap, opps: HMap, enemies: EMap) = {
+    val damaged = (heros ++ opps)
       .flatMap { case (id, hero) =>
-        enemies
-          .filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }
-          .mapValues(_.withDamaged())
+        enemies.filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }.keys
       }
-    doPush(heros, enemies ++ newEnemies, (0, 0))
+    val newEnemies = damaged
+      .groupMapReduce(identity)(_ => 2)(_ + _)
+      .map { case (id, damage) => (id, enemies(id).withDamage(damage)) }
+    doPush(heros, opps, enemies ++ newEnemies, (0, 0))
   }
 
-  def doPush(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
-    moveMobs(heros, enemies, gained)
+  def doPush(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
+    moveMobs(heros, opps, enemies, gained)
   }
 
-  def moveMobs(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
-    shieldDecay(heros, enemies, gained)
+  def moveMobs(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
+    shieldDecay(heros, opps, enemies, gained)
   }
 
-  def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
+  def shieldDecay(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
     // TODO
     // shieldDecay
     // cancel control
     // remove enemies
-    validateWithInput(heros, enemies, gained)
+    validateWithInput(heros, opps, enemies, gained)
   }
 
-  def validateWithInput(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
+  def validateWithInput(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
     val em = heros ++ enemies.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
