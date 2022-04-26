@@ -289,7 +289,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def doPush(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
     // TODO: need to verify working
-    val newEnemies = cmds
+    val pushedEnemies = cmds
       .collect {
         case Wind(hid, dir) => {
           val hero = heros(hid)
@@ -299,7 +299,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
       }
       .flatMap(identity)
       .toMap
-    val newOpps = cmds
+    val pushedOpps = cmds
       .collect {
         case Wind(hid, dir) => {
           val hero = heros(hid)
@@ -308,7 +308,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
         }
       }
       .flatMap(identity)
-    moveMobs(heros, opps ++ newOpps, enemies, newEnemies, gained)
+    moveMobs(heros, opps ++ pushedOpps, enemies, pushedEnemies, gained)
   }
 
   def moveMobs(heros: HMap, opps: HMap, enemies: EMap, pushed: EMap, gained: (Int, Int)) = {
