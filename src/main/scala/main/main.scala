@@ -7,24 +7,23 @@ import scala.collection.mutable
 
 // Vec2 ===========================================================================================
 
-@inline final case class Vec2(x: Int, y: Int) {
+@inline final case class Vec2(x: Double, y: Double) {
   @inline def unary_- = Vec2(-x, -y)
   @inline def abs = Vec2(Math.abs(x), Math.abs(y))
 
   @inline def +(that: Vec2) = Vec2(x + that.x, y + that.y)
-  @inline def +(that: Int) = Vec2(x + that, y + that)
+  @inline def +(that: Double) = Vec2(x + that, y + that)
   @inline def -(that: Vec2) = Vec2(x - that.x, y - that.y)
-  @inline def -(that: Int) = Vec2(x - that, y - that)
-  @inline def *(a: Int) = Vec2(x * a, y * a)
-  @inline def /(a: Int) = Vec2(x / a, y / a)
-  @inline def /(a: Double) = Vec2((x / a).toInt, (y / a).toInt)
+  @inline def -(that: Double) = Vec2(x - that, y - that)
+  @inline def *(a: Double) = Vec2(x * a, y * a)
+  @inline def /(a: Double) = Vec2(x / a, y / a)
   @inline def dot(that: Vec2) = x * that.x + y * that.y
   @inline def cross(that: Vec2) = x * that.y - y * that.x
 
   @inline def lengthSq = x * x + y * y
   @inline def length = Math.sqrt(lengthSq)
-  @inline def normalized = this / length.toInt
-  @inline def truncate(size: Int) = this / (length / size)
+  @inline def unit = this / length
+  @inline def normalize(size: Double) = this / length * size
   @inline def area = x * y
   @inline def normal = Vec2(y, -x)
   @inline def angle = Math.atan2(y, x)
@@ -36,9 +35,9 @@ import scala.collection.mutable
 }
 
 object Vec2 {
-  @inline def apply(x: Int, y: Int) = new Vec2(x, y)
-  @inline def apply(tuple: (Int, Int)) = new Vec2(tuple._1, tuple._2)
-  @inline def apply(x: Int) = new Vec2(x, x)
+  @inline def apply(x: Double, y: Double) = new Vec2(x, y)
+  @inline def apply(tuple: (Double, Double)) = new Vec2(tuple._1, tuple._2)
+  @inline def apply(x: Double) = new Vec2(x, x)
   @inline def apply() = new Vec2(0, 0)
 }
 
@@ -86,13 +85,13 @@ object InputHandler {
 
 class Command(val heroId: Int)
 case class Move(override val heroId: Int, pos: Vec2) extends Command(heroId) {
-  override def toString = s"MOVE ${pos.x} ${pos.y}"
+  override def toString = s"MOVE ${pos.x.toInt} ${pos.y.toInt}"
 }
 case class Wind(override val heroId: Int, dir: Vec2) extends Command(heroId) {
-  override def toString = s"SPELL WIND ${dir.x} ${dir.y}"
+  override def toString = s"SPELL WIND ${dir.x.toInt} ${dir.y.toInt}"
 }
 case class Control(override val heroId: Int, enemyId: Int, dest: Vec2) extends Command(heroId) {
-  override def toString = s"SPELL CONTROL ${enemyId} ${dest.x} ${dest.y}"
+  override def toString = s"SPELL CONTROL ${enemyId} ${dest.x.toInt} ${dest.y.toInt}"
 }
 case class Shield(override val heroId: Int, enemyId: Int) extends Command(heroId) {
   override def toString = s"SPELL SHIELD ${enemyId}"
@@ -263,7 +262,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
 case class Nexus(pos: Vec2, status: NexusStatus = NexusStatus(3, 0)) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
-  def dirVec(p: Vec2) = (pos - p).truncate(400)
+  def dirVec(p: Vec2) = (pos - p).normalize(400)
   def withStatus(newStatus: NexusStatus) =
     Nexus(pos, newStatus)
 }
@@ -323,7 +322,7 @@ class EntityFactory(val gs: GameStatus) {
   }
 
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
-    val vel = (dest - e.vPos).truncate(400)
+    val vel = (dest - e.vPos).normalize(400)
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
     Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled)
   }
