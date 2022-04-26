@@ -88,20 +88,24 @@ object InputHandler {
 
 // Commands =======================================================================================
 
-class Command(val heroId: Int)
-case class Move(override val heroId: Int, pos: Vec2) extends Command(heroId) {
+trait SPELL
+trait Command {
+  val heroId: Int
+}
+
+case class Move(override val heroId: Int, pos: Vec2) extends Command {
   override def toString = s"MOVE ${pos.x.toInt} ${pos.y.toInt}"
 }
-case class Wind(override val heroId: Int, dir: Vec2) extends Command(heroId) {
+case class Wind(override val heroId: Int, dir: Vec2) extends Command with SPELL {
   override def toString = s"SPELL WIND ${dir.x.toInt} ${dir.y.toInt}"
 }
-case class Control(override val heroId: Int, enemyId: Int, dest: Vec2) extends Command(heroId) {
+case class Control(override val heroId: Int, enemyId: Int, dest: Vec2) extends Command with SPELL {
   override def toString = s"SPELL CONTROL ${enemyId} ${dest.x.toInt} ${dest.y.toInt}"
 }
-case class Shield(override val heroId: Int, enemyId: Int) extends Command(heroId) {
+case class Shield(override val heroId: Int, enemyId: Int) extends Command with SPELL {
   override def toString = s"SPELL SHIELD ${enemyId}"
 }
-case class Wait(override val heroId: Int) extends Command(heroId) {
+case class Wait(override val heroId: Int) extends Command {
   override def toString = s"WAIT"
 }
 
@@ -277,8 +281,9 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     val newEnemies = (damaged ++ wildDamaged)
       .groupMapReduce(identity)(_ => 2)(_ + _)
       .map { case (id, damage) => (id, enemies(id).withDamage(damage)) }
+    val spend = cmds.count(_.isInstanceOf[SPELL]) * 10
     val wildLifeManaGained = wildDamaged.size * 2
-    val manaGained = damaged.size * 2 + wildLifeManaGained
+    val manaGained = damaged.size * 2 + wildLifeManaGained - spend
     doPush(heros, opps, enemies ++ newEnemies, (manaGained, wildLifeManaGained))
   }
 
