@@ -331,7 +331,7 @@ object Game {
   }
 
   @tailrec
-  def simulate(gs: GameStatus, cmds: Seq[Command]): Unit = {
+  def processTurn(gs: GameStatus, cmds: Seq[Command]): Unit = {
     val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
     val factory = new EntityFactory(gs)
     val ec = readLine.toInt
@@ -349,14 +349,14 @@ object Game {
     val elapsed = (t1 - t0) / 1000000.0
     Console.err.println(s"Elapsed time: ${elapsed} ms")
 
-    simulate(newGs, nextCmds)
+    processTurn(newGs, nextCmds)
   }
 
   def main() = {
     val (myNexus, oppNexus) = Game.initNexus()
     var gs = GameStatus(myNexus, oppNexus)
     val sCmd = gs.starting.keys.map(i => Wait(i)).toSeq
-    simulate(gs, sCmd)
+    processTurn(gs, sCmd)
   }
 }
 
