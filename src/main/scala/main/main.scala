@@ -136,6 +136,10 @@ case class Hero(
     }
     res
   }
+  def withWind(dir: Vec2) = {
+    val pos = vPos + dir.normalize(2200)
+    Hero(id, pos, owner, shieldLife)
+  }
 
   override def eligibleToFastPath(e: EntityInput) = false
   def withShield() = Hero(id, vPos, owner, 12)
@@ -186,6 +190,10 @@ case class Enemy(
     Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
   def withDamage(damage: Int) =
     Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
+  def withWind(dir: Vec2) = {
+    val pos = vPos + dir.normalize(2200)
+    Enemy(id, pos, vVel, health, trajactory, threatFor, isControlled, shieldLife)
+  }
 
   override def toString() =
     s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife},${health}"
@@ -260,11 +268,11 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     val (inBase, outBase) = heros.partition { case (_, hero) => gs.myNexus.isNear(hero.vPos) }
     val damaged = (inBase ++ opps)
       .flatMap { case (id, hero) =>
-        enemies.filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }.keys
+        enemies.filter(_._2.distSq(hero) <= 800 * 800).keys
       }
     val wildDamaged = outBase
       .flatMap { case (id, hero) =>
-        enemies.filter { case (id, enemy) => hero.distSq(enemy) <= 800 * 800 }.keys
+        enemies.filter(_._2.distSq(hero) <= 800 * 800).keys
       }
     val newEnemies = (damaged ++ wildDamaged)
       .groupMapReduce(identity)(_ => 2)(_ + _)
@@ -275,11 +283,32 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def doPush(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
-    moveMobs(heros, opps, enemies, gained)
+    // TODO: need to verify working
+    val newEnemies = cmds
+      .collect {
+        case Wind(hid, dir) => {
+          val hero = heros(hid)
+          val targets = enemies.filter(_._2.distSq(hero) <= 1280 * 1280)
+          targets.mapValues(_.withWind(dir)).toMap
+        }
+      }
+      .flatMap(identity)
+      .toMap
+    val newOpps = cmds
+      .collect {
+        case Wind(hid, dir) => {
+          val hero = heros(hid)
+          val targets = opps.filter(_._2.distSq(hero) <= 1280 * 1280)
+          targets.mapValues(_.withWind(dir))
+        }
+      }
+      .flatMap(identity)
+    moveMobs(heros, opps ++ newOpps, enemies, newEnemies, gained)
   }
 
-  def moveMobs(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
-    shieldDecay(heros, opps, enemies, gained)
+  def moveMobs(heros: HMap, opps: HMap, enemies: EMap, pushed: EMap, gained: (Int, Int)) = {
+    val newEnemies = enemies.mapValues(_.takeTurn()).toMap
+    shieldDecay(heros, opps, newEnemies ++ pushed, gained)
   }
 
   def shieldDecay(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
@@ -291,7 +320,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def validateWithInput(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
-    val em = heros ++ enemies.mapValues(_.takeTurn())
+    val em = heros ++ enemies
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     def checkF(e: EntityInput) = em.contains(e.id) && em(e.id).eligibleToFastPath(e)
     val newEntityMap = inputData
