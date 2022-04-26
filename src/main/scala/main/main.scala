@@ -46,7 +46,9 @@ object Vec2 {
 
 // Input and Output===============================================================================
 
-case class NexusStatus(health: Int, mana: Int)
+case class Status(health: Int, mana: Int) {
+  def withGained(gained: Int) = Status(health, mana + gained)
+}
 case class EntityInput(
     id: Int,
     _type: Int,
@@ -66,10 +68,10 @@ object InputHandler {
     Vec2(baseX, baseY)
   }
 
-  def handleNexusStatus() = {
+  def handleStatus() = {
     val Array(h1, m1) = (readLine split " ").filter(_ != "").map(_.toInt)
     val Array(h2, m2) = (readLine split " ").filter(_ != "").map(_.toInt)
-    (NexusStatus(h1, m1), NexusStatus(h2, m2))
+    (Status(h1, m1), Status(h2, m2))
   }
 
   def handleEntity() = {
@@ -239,22 +241,22 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def performCombat(heros: HMap, enemies: EMap) = {
-    doPush(heros, enemies)
+    doPush(heros, enemies, 0)
   }
 
-  def doPush(heros: HMap, enemies: EMap) = {
-    moveMobs(heros, enemies)
+  def doPush(heros: HMap, enemies: EMap, gained: Int) = {
+    moveMobs(heros, enemies, gained)
   }
 
-  def moveMobs(heros: HMap, enemies: EMap) = {
-    shieldDecay(heros, enemies)
+  def moveMobs(heros: HMap, enemies: EMap, gained: Int) = {
+    shieldDecay(heros, enemies, gained)
   }
 
-  def shieldDecay(heros: HMap, enemies: EMap) = {
-    validateWithInput(heros, enemies)
+  def shieldDecay(heros: HMap, enemies: EMap, gained: Int) = {
+    validateWithInput(heros, enemies, gained)
   }
 
-  def validateWithInput(heros: HMap, enemies: EMap) = {
+  def validateWithInput(heros: HMap, enemies: EMap, gained: Int) = {
     val em = heros ++ enemies.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
@@ -264,26 +266,29 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
         case e: EntityInput                => (e.id, factory.createEnemy(e))
       })
       .toMap
-    new EntityPool(newEntityMap)
+    gs.withPoolAndGained(new EntityPool(newEntityMap), gained)
   }
 }
 
 // Game Status ====================================================================================
 
-case class Nexus(pos: Vec2, status: NexusStatus = NexusStatus(3, 0)) {
+case class Nexus(pos: Vec2) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
   def dirVec(p: Vec2) = (pos - p).normalize(400)
-  def withStatus(newStatus: NexusStatus) =
-    Nexus(pos, newStatus)
 }
 
 case class GameStatus(
     val myNexus: Nexus,
+    val myStatus: Status,
     val oppNexus: Nexus,
+    val oppStatus: Status,
     val pool: EntityPool = new EntityPool
 ) {
   def isL = myNexus.pos.x == 0
-  def withPool(newPool: EntityPool) = GameStatus(myNexus, oppNexus, newPool)
+  def withPoolAndGained(newPool: EntityPool, gained: Int) =
+    GameStatus(myNexus, myStatus.withGained(gained), oppNexus, oppStatus, newPool)
+  def withStatus(myS: Status, oppS: Status) =
+    GameStatus(myNexus, myS, oppNexus, oppS, pool)
 
   val startingL = Map(
     0 -> Move(0, Vec2(5000, 5000)),
@@ -348,11 +353,6 @@ object Game {
     (Nexus(myPos), Nexus(oppPos))
   }
 
-  def updateNexusStatus(gs: GameStatus) = {
-    val (sMy, sOpp) = InputHandler.handleNexusStatus()
-    (gs.myNexus.withStatus(sMy), gs.oppNexus.withStatus(sOpp))
-  }
-
   def heuristic(gs: GameStatus): Seq[Command] = {
     val pool = gs.pool
     var heros = pool.heros.values.toSeq
@@ -361,7 +361,7 @@ object Game {
       .filter(_.threatFor == 1)
       .sortBy(_.trajactory.size)
       .take(3)
-    val mana = gs.myNexus.status.mana
+    val mana = gs.myStatus.mana
 
     val cmds = dangers.map[Command](e => {
       heros = heros.sortBy(h => h.vPos.distSq(e.vPos))
@@ -377,8 +377,9 @@ object Game {
   }
 
   @tailrec
-  def processTurn(gs: GameStatus, cmds: Seq[Command]): Unit = {
-    val (myNexus, oppNexus) = Game.updateNexusStatus(gs)
+  def processTurn(gsPrev: GameStatus, cmds: Seq[Command]): Unit = {
+    val (myStatus, oppStatus) = InputHandler.handleStatus
+    val gs = gsPrev.withStatus(myStatus, oppStatus)
     val factory = new EntityFactory(gs)
     val ec = readLine.toInt
     val inputData = (0 until ec).map(_ => InputHandler.handleEntity())
@@ -386,8 +387,7 @@ object Game {
     val t0 = System.nanoTime()
 
     val simulator = new Simulator(gs, cmds, inputData)
-    val pool = simulator.simulate()
-    val newGs = GameStatus(myNexus, oppNexus, pool)
+    val newGs = simulator.simulate()
     val nextCmds = heuristic(newGs).sortBy(_.heroId)
     nextCmds.foreach(println)
 
@@ -400,7 +400,7 @@ object Game {
 
   def main() = {
     val (myNexus, oppNexus) = Game.initNexus()
-    var gs = GameStatus(myNexus, oppNexus)
+    var gs = GameStatus(myNexus, Status(3, 0), oppNexus, Status(3, 0))
     val sCmd = gs.starting.keys.map(i => Wait(i)).toSeq
     processTurn(gs, sCmd)
   }
