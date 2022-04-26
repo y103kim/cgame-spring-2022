@@ -222,9 +222,9 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     val newHeros = cmds.collect {
       case Move(hid, dest) => {
         val hero = heros(hid)
-        val vel = (dest - hero.vPos).truncate(800)
-        val newPos = hero.vPos + vel
-        Console.err.println(s"[] hero: ${hero}, dest: ${dest}, ${vel}, ${newPos}")
+        val distSq = hero.vPos.distSq(dest)
+        def vel = (dest - hero.vPos).normalize(800)
+        val newPos = if (distSq > 800 * 800) hero.vPos + vel else dest
         (hid, heros(hid).withPos(newPos))
       }
     }
