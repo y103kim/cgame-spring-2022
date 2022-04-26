@@ -274,6 +274,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
 case class Nexus(pos: Vec2) {
   def isNear(v: Vec2) = pos.distSq(v) <= 5000 * 5000
+  def isClose(v: Vec2) = pos.distSq(v) <= 300 * 300
   def dirVec(p: Vec2) = (pos - p).normalize(400)
 }
 
@@ -324,13 +325,13 @@ class EntityFactory(val gs: GameStatus) {
         q: Queue[(Vec2, Vec2)],
         tf: Int
     ): (Queue[(Vec2, Vec2)], Int) = {
-      if (!curr.bound || curr == Vec2() || curr == Vec2(17630, 9000))
+      if (!curr.bound || gs.myNexus.isClose(curr) || gs.oppNexus.isClose(curr))
         (q, tf)
       else if (gs.myNexus.isNear(curr + vel)) {
-        val newVel = gs.myNexus.dirVec(curr + vel)
+        val newVel = gs.myNexus.dirVec(curr + vel).truncate
         getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
       } else if (gs.oppNexus.isNear(curr + vel)) {
-        val newVel = gs.oppNexus.dirVec(curr + vel)
+        val newVel = gs.oppNexus.dirVec(curr + vel).truncate
         getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
       } else
         getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
@@ -340,7 +341,7 @@ class EntityFactory(val gs: GameStatus) {
 
   def createEnemy(e: EntityInput) = {
     val (trajactory, threatFor) = getTraj(e.vPos, e.vVel)
-    Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor, false)
+    Enemy(e.id, e.vPos, e.vVel, e.health, trajactory, threatFor, e.isControlled, e.shieldLife)
   }
 
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
