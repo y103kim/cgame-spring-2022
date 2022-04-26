@@ -241,22 +241,22 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def performCombat(heros: HMap, enemies: EMap) = {
-    doPush(heros, enemies, 0)
+    doPush(heros, enemies, (0, 0))
   }
 
-  def doPush(heros: HMap, enemies: EMap, gained: Int) = {
+  def doPush(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     moveMobs(heros, enemies, gained)
   }
 
-  def moveMobs(heros: HMap, enemies: EMap, gained: Int) = {
+  def moveMobs(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     shieldDecay(heros, enemies, gained)
   }
 
-  def shieldDecay(heros: HMap, enemies: EMap, gained: Int) = {
+  def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     validateWithInput(heros, enemies, gained)
   }
 
-  def validateWithInput(heros: HMap, enemies: EMap, gained: Int) = {
+  def validateWithInput(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     val em = heros ++ enemies.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     val newEntityMap = inputData
@@ -282,13 +282,20 @@ case class GameStatus(
     val myStatus: Status,
     val oppNexus: Nexus,
     val oppStatus: Status,
-    val pool: EntityPool = new EntityPool
+    val pool: EntityPool = new EntityPool,
+    val wildLifeMana: Int = 0
 ) {
   def isL = myNexus.pos.x == 0
-  def withPoolAndGained(newPool: EntityPool, gained: Int) =
-    GameStatus(myNexus, myStatus.withGained(gained), oppNexus, oppStatus, newPool)
+
+  def withPoolAndGained(newPool: EntityPool, gained: (Int, Int)) = {
+    val (manaGained, wildLifeManaGained) = gained
+    val newS = myStatus.withGained(manaGained)
+    val newWildLifeMana = wildLifeMana + wildLifeManaGained
+    GameStatus(myNexus, newS, oppNexus, oppStatus, newPool, newWildLifeMana)
+  }
+
   def withStatus(myS: Status, oppS: Status) =
-    GameStatus(myNexus, myS, oppNexus, oppS, pool)
+    GameStatus(myNexus, myS, oppNexus, oppS, pool, wildLifeMana)
 
   val startingL = Map(
     0 -> Move(0, Vec2(5000, 5000)),
