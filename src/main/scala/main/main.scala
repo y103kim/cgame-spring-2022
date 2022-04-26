@@ -121,8 +121,17 @@ case class Hero(
     override val owner: Int,
     override val shieldLife: Int = 0
 ) extends Entity(id, vPos, Vec2(), owner, shieldLife) {
-  override def validate(e: EntityInput) = false
+  override def validate(e: EntityInput) = {
+    val res = vPos == e.vPos
+    if (!res) {
+      Console.err.println("Validation Fail for hero")
+      Console.err.println(s"  entity: ${this}")
+      Console.err.println(s"  input: ${e}")
+    }
+    res
+  }
   def withShield() = Hero(id, vPos, owner, 12)
+  def withPos(pos: Vec2) = Hero(id, pos, owner, shieldLife)
 }
 
 case class Enemy(
@@ -208,7 +217,16 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   }
 
   def moveHeroes(heros: HMap, enemies: EMap) = {
-    performCombat(heros, enemies)
+    val newHeros = cmds.collect {
+      case Move(hid, dest) => {
+        val hero = heros(hid)
+        val vel = (dest - hero.vPos).truncate(800)
+        val newPos = hero.vPos + vel
+        Console.err.println(s"[] hero: ${hero}, dest: ${dest}, ${vel}, ${newPos}")
+        (hid, heros(hid).withPos(newPos))
+      }
+    }
+    performCombat(heros ++ newHeros, enemies)
   }
 
   def performCombat(heros: HMap, enemies: EMap) = {
@@ -260,8 +278,8 @@ case class GameStatus(
 
   val startingL = Map(
     0 -> Move(0, Vec2(5000, 5000)),
-    1 -> Move(1, Vec2(2100, 6000)),
-    2 -> Move(2, Vec2(6000, 2100))
+    1 -> Move(1, Vec2(6000, 2100)),
+    2 -> Move(2, Vec2(2100, 6000))
   )
   val startingR = Map(
     3 -> Move(3, Vec2(12630, 4000)),
