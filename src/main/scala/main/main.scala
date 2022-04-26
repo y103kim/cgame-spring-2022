@@ -117,6 +117,7 @@ class Entity(
   val vPos: Vec2 = vPosRaw.symTruncate
   def validate(e: EntityInput) = true
   def takeTurn() = this
+  def eligibleToFastPath(e: EntityInput) = false
   @inline def distSq(that: Entity) = vPos.distSq(that.vPos)
 }
 
@@ -135,6 +136,8 @@ case class Hero(
     }
     res
   }
+
+  override def eligibleToFastPath(e: EntityInput) = false
   def withShield() = Hero(id, vPos, owner, 12)
   def withPos(pos: Vec2) = Hero(id, pos, owner, shieldLife)
 }
@@ -149,10 +152,14 @@ case class Enemy(
     isControlled: Boolean,
     override val shieldLife: Int = 0
 ) extends Entity(id, vPosRaw, vVel) {
-  override def validate(e: EntityInput) = {
-    val res = isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
+  override def validate(e: EntityInput) =
+    isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
+
+  override def eligibleToFastPath(e: EntityInput) = {
+    val res =
+      vPos == e.vPos && vVel == e.vVel && (health != e.health || shieldLife != e.shieldLife)
     if (!res) {
-      Console.err.println("Validation Fail for Enemy")
+      Console.err.println("Validation Fail for Enemy fast path")
       Console.err.println(s"  entity: ${this}")
       Console.err.println(s"  input: ${e}")
     }
@@ -181,7 +188,7 @@ case class Enemy(
     Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
 
   override def toString() =
-    s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife}"
+    s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife},${health}"
 }
 
 class EntityPool(val entityMap: Map[Int, Entity] = Map()) {
@@ -275,11 +282,13 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
   def validateWithInput(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
     val em = heros ++ enemies.mapValues(_.takeTurn())
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
+    def checkF(e: EntityInput) = em.contains(e.id) && em(e.id).eligibleToFastPath(e)
     val newEntityMap = inputData
       .map(_ match {
-        case e: EntityInput if check(e)    => (e.id, em(e.id))
-        case e: EntityInput if e._type > 0 => (e.id, factory.createHero(e))
-        case e: EntityInput                => (e.id, factory.createEnemy(e))
+        case e if check(e)    => (e.id, em(e.id))
+        case e if checkF(e)   => (e.id, factory.createEnemyFast(em(e.id), e))
+        case e if e._type > 0 => (e.id, factory.createHero(e))
+        case e                => (e.id, factory.createEnemy(e))
       })
       .toMap
     gs.withPoolAndGained(new EntityPool(newEntityMap), gained)
@@ -363,7 +372,12 @@ class EntityFactory(val gs: GameStatus) {
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
     val vel = (dest - e.vPos).normalize(400).truncate
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
-    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled)
+    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled, e.shieldLife)
+  }
+
+  def createEnemyFast(enemy: Entity, ei: EntityInput) = {
+    val e = enemy.asInstanceOf[Enemy]
+    Enemy(e.id, e.vPos, e.vVel, ei.health, e.trajactory, e.threatFor, e.isControlled, e.shieldLife)
   }
 }
 
