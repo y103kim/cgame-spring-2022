@@ -159,10 +159,11 @@ case class Enemy(
     trajactory: Queue[(Vec2, Vec2)],
     threatFor: Int,
     isControlled: Boolean,
-    override val shieldLife: Int = 0
+    override val shieldLife: Int = 0,
+    controlDest: Vec2 = Vec2()
 ) extends Entity(id, vPosRaw, vVel) {
   override def validate(e: EntityInput) =
-    isControlled || (vPos == e.vPos && vVel == e.vVel && health == e.health)
+    (vPos == e.vPos && vVel == e.vVel && health == e.health)
 
   override def eligibleToFastPath(e: EntityInput) = {
     val res =
@@ -195,8 +196,8 @@ case class Enemy(
     Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 13)
   def withDecayedShield() =
     Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, shieldLife - 1)
-  def withUncontroll() =
-    Enemy(id, vPos, vVel, health, trajactory, threatFor, false, shieldLife)
+  def withControl(dest: Vec2) =
+    Enemy(id, vPos, vVel, health, trajactory, threatFor, true, shieldLife, dest)
   def withDamage(damage: Int) =
     Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
   def withWind(dir: Vec2) = {
@@ -236,15 +237,15 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def checkSpell(hero: Hero, enemy: Enemy) = {
     val distSq = hero.distSq(enemy)
-    !enemy.isControlled && enemy.shieldLife == 0 && distSq <= 2200 * 2200
+    enemy.shieldLife == 0 && distSq <= 2200 * 2200
   }
 
   def doControl(heros: HMap, opps: HMap, enemies: EMap) = {
-    val newEnemies = cmds.collect {
+    val controlled = cmds.collect {
       case Control(hid, eid, dest) if checkSpell(heros(hid), enemies(eid)) =>
-        (eid, factory.createEnemy(enemies(eid), dest, true))
+        (eid, enemies(eid).withControl(dest))
     }
-    doShield(heros, opps, enemies ++ newEnemies)
+    doShield(heros, opps, enemies ++ controlled)
   }
 
   def doShield(heros: HMap, opps: HMap, enemies: EMap) = {
@@ -320,10 +321,12 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     val alive = enemies.filter(_._2.health > 0)
-    val decayedE = alive.filter(_._2.shieldLife > 0).mapValues(_.withDecayedShield())
-    val uncontrolled = alive.filter(_._2.isControlled).mapValues(_.withUncontroll())
+    val controlled = enemies ++ enemies
+      .filter(_._2.isControlled)
+      .mapValues(e => factory.createEnemy(e, e.controlDest, false))
+    val decayedE = controlled.filter(_._2.shieldLife > 0).mapValues(_.withDecayedShield())
     val decayedH = heros.filter(_._2.shieldLife > 0).mapValues(_.withDecayedShield())
-    validateWithInput(heros ++ decayedH, alive ++ decayedE ++ uncontrolled, gained)
+    validateWithInput(heros ++ decayedH, controlled ++ decayedE, gained)
   }
 
   def validateWithInput(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
