@@ -192,7 +192,7 @@ case class Enemy(
   def withDecayedShield() = copy(shieldLife = shieldLife - 1)
   def withControl(dest: Vec2) = copy(isControlled = true, controlDest = dest)
   def withDamage(damage: Int) = copy(health = health - damage)
-  def withWind(dir: Vec2) = copy(vPosRaw = vPos + dir.normalize(2200))
+  def withWind(dir: Vec2) = copy(vPosRaw = vPos + dir.normalize(2200)) // TODO: trajactory
 
   override def toString() =
     s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife},${health}"
@@ -310,6 +310,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     val alive = enemies.filter(_._2.health > 0)
+    // TODO: handle outbounded && closeBase
     val controlled = enemies ++ enemies
       .filter(_._2.isControlled)
       .mapValues(e => factory.createEnemy(e, e.controlDest, false))
@@ -320,6 +321,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def validateWithInput(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     val em = heros ++ enemies
+    // TODO: using disapeared entity in next turn
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     def checkF(e: EntityInput) = em.contains(e.id) && em(e.id).eligibleToFastPath(e)
     val newEntityMap = inputData
