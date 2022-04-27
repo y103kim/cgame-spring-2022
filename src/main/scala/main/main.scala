@@ -429,6 +429,20 @@ class EntityFactory(val gs: GameStatus) {
   }
 }
 
+// Strategy =======================================================================================
+
+trait Strategy
+trait AttackNearest extends Strategy
+trait AttackSecondNearest extends Strategy
+trait AttackOther extends Strategy
+trait MoveStarting extends Strategy
+trait Patrol extends Strategy
+trait WindOut extends Strategy
+trait WindIn extends Strategy
+trait ShieldSelf extends Strategy
+trait ControlEnemy extends Strategy
+trait ControlOpps extends Strategy
+
 // GA =============================================================================================
 
 class Organism(val dna: Vector[Double]) {
