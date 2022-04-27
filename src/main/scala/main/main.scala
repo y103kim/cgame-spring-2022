@@ -437,7 +437,7 @@ trait Strategy
 trait Targeting
 trait Targetless
 object Attack extends Strategy with Targeting
-object Patrol extends Strategy with Targetless
+object Patrol extends Strategy with Targetless // TODO: impl patrol
 object WindOut extends Strategy with Targeting
 object ShieldSelf extends Strategy with Targetless
 object ControlEnemy extends Strategy with Targeting
@@ -449,11 +449,10 @@ class CommandGen(val gs: GameStatus) {
   type HeSeq = Seq[(Hero, Enemy, Targeting)]
 
   def numToStrategy(num: Double) = num match {
-    case n if n <= 0.2 => Attack
-    case n if n <= 0.4 => Patrol
-    case n if n <= 0.6 => WindOut
-    case n if n <= 0.8 => ShieldSelf
-    case n if n <= 1.0 => ControlEnemy
+    case n if n <= 0.25 => Attack
+    case n if n <= 0.5  => WindOut
+    case n if n <= 0.75 => ShieldSelf
+    case n if n <= 1.0  => ControlEnemy
   }
 
   def sortTargets() = {
