@@ -466,6 +466,25 @@ class CommandGen(val gs: GameStatus) {
     def distScore(pos: Vec2) = 10 - gs.myNexus.pos.distSq(pos).toInt / (400 * 400)
     enemies.values.toSeq.sortBy(e => threatLevel(e.threatFor) + distScore(e.vPos))
   }
+
+  def allocTargets(ths: ThSeq): HeSeq = {
+    val targets = sortTargets().take(ths.size)
+    val distsSeq = for {
+      (hero, i) <- ths.map(_._1).zipWithIndex
+      (enemies, j) <- targets.zipWithIndex
+    } yield ((i, j), hero.distSq(enemies))
+    val dists = distsSeq.toMap
+    val order = (1 to ths.size).toList
+    val minPerm = order.permutations.minBy(perm => perm.zipWithIndex.map(pp => dists(pp)).sum)
+    minPerm.zipWithIndex.map {
+      case (i, j) => {
+        val (hero, targeting) = ths(i)
+        val enemy = targets(j)
+        (hero, enemy, targeting)
+      }
+    }.toSeq
+  }
+
 }
 
 // GA =============================================================================================
