@@ -443,12 +443,28 @@ object ShieldSelf extends Strategy with Targetless
 object ControlEnemy extends Strategy with Targeting
 
 class CommandGen(val gs: GameStatus) {
+  type ShSeq = Seq[(Hero, Strategy)]
+  type ThSeq = Seq[(Hero, Targeting)]
+  type LhSeq = Seq[(Hero, Targetless)]
+  type HeSeq = Seq[(Hero, Enemy, Targeting)]
+
   def numToStrategy(num: Double) = num match {
     case n if n <= 0.2 => Attack
     case n if n <= 0.4 => Patrol
     case n if n <= 0.6 => WindOut
     case n if n <= 0.8 => ShieldSelf
     case n if n <= 1.0 => ControlEnemy
+  }
+
+  def sortTargets() = {
+    val enemies = gs.pool.enemies
+    def threatLevel(threatFor: Int) = threatFor match {
+      case 1 => 10
+      case 2 => -10
+      case 0 => 0
+    }
+    def distScore(pos: Vec2) = 10 - gs.myNexus.pos.distSq(pos).toInt / (400 * 400)
+    enemies.values.toSeq.sortBy(e => threatLevel(e.threatFor) + distScore(e.vPos))
   }
 }
 
