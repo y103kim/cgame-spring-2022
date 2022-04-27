@@ -435,49 +435,57 @@ class Organism(val dna: Vector[Double]) {
   def mutate() = {
     val cnt = GA.rnd.nextInt(GA.mutationCountMax)
     val ratio = GA.mutationRatio
-    def genChange = GA.rnd.nextDouble() * ratio
-    val changes = (0 to cnt).map(_ => (GA.rnd.nextInt(18), genChange)).toMap
+    def genChange = (GA.rnd.nextDouble() - 0.5) * ratio
+    val changes = (0 to cnt).map(_ => (GA.rnd.nextInt(GA.dnaSize), genChange)).toMap
     val newDna = dna.zipWithIndex.map { case (v, i) => v + changes.getOrElse(i, 0.0) }
     Organism(newDna)
   }
 
   def crossOver(other: Organism) = {
-    val cut1 = GA.rnd.nextInt(16) + 1
-    val newDna1 = dna.slice(0, cut1) ++ other.dna.slice(cut1, 18)
-    val cut2 = GA.rnd.nextInt(16) + 1
-    val newDna2 = other.dna.slice(0, cut2) ++ dna.slice(cut2, 18)
+    val cut1 = GA.rnd.nextInt(GA.dnaSize - 2) + 1
+    val newDna1 = dna.slice(0, cut1) ++ other.dna.slice(cut1, GA.dnaSize)
+    val cut2 = GA.rnd.nextInt(GA.dnaSize - 2) + 1
+    val newDna2 = other.dna.slice(0, cut2) ++ dna.slice(cut2, GA.dnaSize)
     List(Organism(newDna1), Organism(newDna2))
   }
+
+  override def toString = dna.toString()
 }
 
 object Organism {
-  def randomDNA = (0 until 18).map(_ => GA.rnd.nextDouble()).toVector
+  def randomDNA = (0 until GA.dnaSize).map(_ => GA.rnd.nextDouble()).toVector
   def apply() = new Organism(randomDNA)
   def apply(dna: Vector[Double]) = new Organism(dna)
 }
 
-class Generation(val population: Seq[Organism]) {
-  def mutate() = Generation(population.map(_.mutate()))
-
-  def evolve(popWithFit: Seq[(Double, Organism)]) {
-    val survive = popWithFit.sortBy(_._1).map(_._2).take(GA.pCutSize)
-    val crossed = survive.combinations(2).flatMap { case Seq(a, b) => a.crossOver(b) }
-    val evolved = (survive ++ crossed).map(_.mutate())
-    Generation(evolved)
-  }
-}
-
+class Generation(val population: Seq[Organism])
 object Generation {
   def apply() = new Generation((1 to GA.pSize).map(_ => Organism()))
   def apply(population: Seq[Organism]) = new Generation(population)
 }
 
 object GA {
+  val dnaSize = 18
   val pSize = 16
   val pCutSize = 4
   val mutationCountMax = 3
-  val mutationRatio = 0.1
+  val mutationRatio = 0.25
   val rnd = new scala.util.Random(seed = 1)
+
+  def evolve(popWithFit: Seq[(Double, Organism)]) = {
+    val survive = popWithFit.sortBy(-_._1).map(_._2).take(GA.pCutSize)
+    val sizeGap = GA.pSize - GA.pCutSize
+    val crossed = Iterator
+      .from(1)
+      .flatMap(_ =>
+        survive
+          .combinations(2)
+          .flatMap { case Seq(a, b) => a.crossOver(b) }
+      )
+      .take(sizeGap)
+    val evolved = (survive ++ crossed).map(_.mutate())
+    Generation(evolved)
+  }
 }
 
 // Game ===========================================================================================
