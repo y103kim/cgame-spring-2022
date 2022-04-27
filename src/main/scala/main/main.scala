@@ -47,7 +47,7 @@ object Vec2 {
 // Input and Output===============================================================================
 
 case class Status(health: Int, mana: Int) {
-  def withGained(gained: Int) = Status(health, mana + gained)
+  def withGained(gained: Int) = copy(mana = mana + gained)
 }
 case class EntityInput(
     id: Int,
@@ -140,15 +140,11 @@ case class Hero(
     }
     res
   }
-  def withWind(dir: Vec2) = {
-    val pos = vPos + dir.normalize(2200)
-    Hero(id, pos, owner, shieldLife)
-  }
-
   override def eligibleToFastPath(e: EntityInput) = false
-  def withShield() = Hero(id, vPos, owner, 13)
-  def withDecayedShield() = Hero(id, vPos, owner, shieldLife - 1)
-  def withPos(pos: Vec2) = Hero(id, pos, owner, shieldLife)
+  def withWind(dir: Vec2) = copy(vPosRaw = vPos + dir.normalize(2200))
+  def withShield() = copy(shieldLife = 13)
+  def withDecayedShield() = copy(shieldLife = shieldLife - 1)
+  def withPos(pos: Vec2) = copy(vPosRaw = pos)
 }
 
 case class Enemy(
@@ -182,7 +178,7 @@ case class Enemy(
       this
     } else {
       val (newPos, newVel) = trajactory.tail.head
-      new Enemy(id, newPos, newVel, health, trajactory.tail, threatFor, isControlled)
+      copy(vPosRaw = newPos, vVel = newVel, trajactory = trajactory.tail)
     }
   }
 
@@ -192,18 +188,11 @@ case class Enemy(
       .zipWithIndex
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
-  def withShield() =
-    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 13)
-  def withDecayedShield() =
-    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, shieldLife - 1)
-  def withControl(dest: Vec2) =
-    Enemy(id, vPos, vVel, health, trajactory, threatFor, true, shieldLife, dest)
-  def withDamage(damage: Int) =
-    Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
-  def withWind(dir: Vec2) = {
-    val pos = vPos + dir.normalize(2200)
-    Enemy(id, pos, vVel, health, trajactory, threatFor, isControlled, shieldLife)
-  }
+  def withShield() = copy(shieldLife = 13)
+  def withDecayedShield() = copy(shieldLife = shieldLife - 1)
+  def withControl(dest: Vec2) = copy(isControlled = true, controlDest = dest)
+  def withDamage(damage: Int) = copy(health = health - damage)
+  def withWind(dir: Vec2) = copy(vPosRaw = vPos + dir.normalize(2200))
 
   override def toString() =
     s"[E${id}] ${vPos},${vVel},${threatFor},${owner},${isControlled},${shieldLife},${health}"
@@ -367,13 +356,13 @@ case class GameStatus(
     val (manaGained, wildLifeManaGained) = gained
     val newS = myStatus.withGained(manaGained)
     val newWildLifeMana = wildLifeMana + wildLifeManaGained
-    GameStatus(myNexus, newS, oppNexus, oppStatus, newPool, newWildLifeMana)
+    copy(myStatus = newS, pool = newPool, wildLifeMana = newWildLifeMana)
   }
 
   def withStatus(myS: Status, oppS: Status) = {
     if (myS.mana != myStatus.mana)
       Console.err.println(s"mana validation fail: my=${myStatus} != ${myS}")
-    GameStatus(myNexus, myS, oppNexus, oppS, pool, wildLifeMana)
+    copy(myStatus = myS, oppStatus = oppS)
   }
 
   val startingL = Map(
@@ -431,12 +420,12 @@ class EntityFactory(val gs: GameStatus) {
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
     val vel = (dest - e.vPos).normalize(400).truncate
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
-    Enemy(e.id, e.vPos, vel, e.health, trajactory, threatFor, isControlled, e.shieldLife)
+    e.copy(vVel = vel, trajactory = trajactory, threatFor = threatFor, isControlled = isControlled)
   }
 
   def createEnemyFast(enemy: Entity, ei: EntityInput) = {
     val e = enemy.asInstanceOf[Enemy]
-    Enemy(e.id, e.vPos, e.vVel, ei.health, e.trajactory, e.threatFor, e.isControlled, e.shieldLife)
+    e.copy(health = ei.health)
   }
 }
 
