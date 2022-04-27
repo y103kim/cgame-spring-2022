@@ -434,16 +434,23 @@ class EntityFactory(val gs: GameStatus) {
 // Strategy =======================================================================================
 
 trait Strategy
-trait AttackNearest extends Strategy
-trait AttackSecondNearest extends Strategy
-trait AttackOther extends Strategy
-trait MoveStarting extends Strategy
-trait Patrol extends Strategy
-trait WindOut extends Strategy
-trait WindIn extends Strategy
-trait ShieldSelf extends Strategy
-trait ControlEnemy extends Strategy
-trait ControlOpps extends Strategy
+trait Targeting
+trait Targetless
+object Attack extends Strategy with Targeting
+object Patrol extends Strategy with Targetless
+object WindOut extends Strategy with Targeting
+object ShieldSelf extends Strategy with Targetless
+object ControlEnemy extends Strategy with Targeting
+
+class CommandGen(val gs: GameStatus) {
+  def numToStrategy(num: Double) = num match {
+    case n if n <= 0.2 => Attack
+    case n if n <= 0.4 => Patrol
+    case n if n <= 0.6 => WindOut
+    case n if n <= 0.8 => ShieldSelf
+    case n if n <= 1.0 => ControlEnemy
+  }
+}
 
 // GA =============================================================================================
 
