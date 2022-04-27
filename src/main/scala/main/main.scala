@@ -429,6 +429,57 @@ class EntityFactory(val gs: GameStatus) {
   }
 }
 
+// GA =============================================================================================
+
+class Organism(val dna: Vector[Double]) {
+  def mutate() = {
+    val cnt = GA.rnd.nextInt(GA.mutationCountMax)
+    val ratio = GA.mutationRatio
+    def genChange = GA.rnd.nextDouble() * ratio
+    val changes = (0 to cnt).map(_ => (GA.rnd.nextInt(18), genChange)).toMap
+    val newDna = dna.zipWithIndex.map { case (v, i) => v + changes.getOrElse(i, 0.0) }
+    Organism(newDna)
+  }
+
+  def crossOver(other: Organism) = {
+    val cut1 = GA.rnd.nextInt(16) + 1
+    val newDna1 = dna.slice(0, cut1) ++ other.dna.slice(cut1, 18)
+    val cut2 = GA.rnd.nextInt(16) + 1
+    val newDna2 = other.dna.slice(0, cut2) ++ dna.slice(cut2, 18)
+    List(Organism(newDna1), Organism(newDna2))
+  }
+}
+
+object Organism {
+  def randomDNA = (0 until 18).map(_ => GA.rnd.nextDouble()).toVector
+  def apply() = new Organism(randomDNA)
+  def apply(dna: Vector[Double]) = new Organism(dna)
+}
+
+class Generation(val population: Seq[Organism]) {
+  def mutate() = Generation(population.map(_.mutate()))
+
+  def evolve(popWithFit: Seq[(Double, Organism)]) {
+    val survive = popWithFit.sortBy(_._1).map(_._2).take(GA.pCutSize)
+    val crossed = survive.combinations(2).flatMap { case Seq(a, b) => a.crossOver(b) }
+    val evolved = (survive ++ crossed).map(_.mutate())
+    Generation(evolved)
+  }
+}
+
+object Generation {
+  def apply() = new Generation((1 to GA.pSize).map(_ => Organism()))
+  def apply(population: Seq[Organism]) = new Generation(population)
+}
+
+object GA {
+  val pSize = 16
+  val pCutSize = 4
+  val mutationCountMax = 3
+  val mutationRatio = 0.1
+  val rnd = new scala.util.Random(seed = 1)
+}
+
 // Game ===========================================================================================
 
 object Game {
