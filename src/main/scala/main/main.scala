@@ -434,19 +434,17 @@ class EntityFactory(val gs: GameStatus) {
 // Strategy =======================================================================================
 
 trait Strategy
-trait Targeting
-trait Targetless
-object Attack extends Strategy with Targeting
-object Patrol extends Strategy with Targetless // TODO: impl patrol
-object WindOut extends Strategy with Targeting
-object ShieldSelf extends Strategy with Targetless
-object ControlEnemy extends Strategy with Targeting
+trait Targeting extends Strategy
+trait Targetless extends Strategy
+object Attack extends Targeting
+object Patrol extends Targetless // TODO: impl patrol
+object WindOut extends Targeting
+object ShieldSelf extends Targetless
+object ControlEnemy extends Targeting
 
-class CommandGen(val gs: GameStatus) {
+object CommandGen {
   type ShSeq = Seq[(Hero, Strategy)]
-  type ThSeq = Seq[(Hero, Targeting)]
-  type LhSeq = Seq[(Hero, Targetless)]
-  type HeSeq = Seq[(Hero, Enemy, Targeting)]
+  type HeSeq = Seq[(Hero, Enemy, Strategy)]
 
   def numToStrategy(num: Double) = num match {
     case n if n <= 0.25 => Attack
@@ -455,7 +453,7 @@ class CommandGen(val gs: GameStatus) {
     case n if n <= 1.0  => ControlEnemy
   }
 
-  def sortTargets() = {
+  def sortTargets(gs: GameStatus) = {
     val enemies = gs.pool.enemies
     def threatLevel(threatFor: Int) = threatFor match {
       case 1 => 10
@@ -466,8 +464,8 @@ class CommandGen(val gs: GameStatus) {
     enemies.values.toSeq.sortBy(e => threatLevel(e.threatFor) + distScore(e.vPos))
   }
 
-  def allocTargets(ths: ThSeq): HeSeq = {
-    val targets = sortTargets().take(ths.size)
+  def allocTargets(ths: ShSeq, gs: GameStatus): HeSeq = {
+    val targets = sortTargets(gs).take(ths.size)
     val distsSeq = for {
       (hero, i) <- ths.map(_._1).zipWithIndex
       (enemies, j) <- targets.zipWithIndex
@@ -481,7 +479,21 @@ class CommandGen(val gs: GameStatus) {
         val enemy = targets(j)
         (hero, enemy, targeting)
       }
-    }.toSeq
+    }
+  }
+
+  def dnaToStrategy(dna: Vector[Double]) =
+    dna.toSeq.map(numToStrategy _).grouped(3)
+
+  def gen(org: Organism, gs: GameStatus) = {
+    val strategiesByTurn = dnaToStrategy(org.dna)
+    for ((strategies, turn) <- strategiesByTurn.zipWithIndex) {
+      val heros = gs.pool.heros.values.toSeq.sortBy(_.id)
+      val shs = heros.zip(strategies)
+      val ths = shs.filter(_._1.isInstanceOf[Targeting])
+      val lhs = shs.filter(_._1.isInstanceOf[Targetless])
+      val hes = allocTargets(ths, gs)
+    }
   }
 
 }
