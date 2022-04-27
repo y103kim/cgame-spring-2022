@@ -275,7 +275,11 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
 
   def performCombat(heros: HMap, opps: HMap, enemies: EMap) = {
     val (inBase, outBase) = heros.partition { case (_, hero) => gs.myNexus.isNear(hero.vPos) }
-    val damaged = (inBase ++ opps)
+    val damaged = inBase
+      .flatMap { case (id, hero) =>
+        enemies.filter(_._2.distSq(hero) <= 800 * 800).keys
+      }
+    val oppDamaged = opps
       .flatMap { case (id, hero) =>
         enemies.filter(_._2.distSq(hero) <= 800 * 800).keys
       }
@@ -283,7 +287,7 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
       .flatMap { case (id, hero) =>
         enemies.filter(_._2.distSq(hero) <= 800 * 800).keys
       }
-    val newEnemies = (damaged ++ wildDamaged)
+    val newEnemies = (damaged ++ wildDamaged ++ oppDamaged)
       .groupMapReduce(identity)(_ => 2)(_ + _)
       .map { case (id, damage) => (id, enemies(id).withDamage(damage)) }
     val spend = cmds.count(_.isInstanceOf[SPELL]) * 10
