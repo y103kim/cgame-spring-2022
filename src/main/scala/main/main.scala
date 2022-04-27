@@ -146,7 +146,8 @@ case class Hero(
   }
 
   override def eligibleToFastPath(e: EntityInput) = false
-  def withShield() = Hero(id, vPos, owner, 12)
+  def withShield() = Hero(id, vPos, owner, 13)
+  def withDecayedShield() = Hero(id, vPos, owner, shieldLife - 1)
   def withPos(pos: Vec2) = Hero(id, pos, owner, shieldLife)
 }
 
@@ -191,7 +192,11 @@ case class Enemy(
       .find { case (p, i) => p.distSq(vHero) <= 800 * 800 * (i + 1) * (i + 1) }
 
   def withShield() =
-    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 12)
+    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, 13)
+  def withDecayedShield() =
+    Enemy(id, vPos, vVel, health, trajactory, threatFor, isControlled, shieldLife - 1)
+  def withUncontroll() =
+    Enemy(id, vPos, vVel, health, trajactory, threatFor, false, shieldLife)
   def withDamage(damage: Int) =
     Enemy(id, vPos, vVel, health - damage, trajactory, threatFor, isControlled, shieldLife)
   def withWind(dir: Vec2) = {
@@ -284,47 +289,40 @@ class Simulator(gs: GameStatus, cmds: Seq[Command], inputData: IndexedSeq[Entity
     val spend = cmds.count(_.isInstanceOf[SPELL]) * 10
     val wildLifeManaGained = wildDamaged.size * 2
     val manaGained = damaged.size * 2 + wildLifeManaGained - spend
-    doPush(heros, opps, enemies ++ newEnemies, (manaGained, wildLifeManaGained))
+    doPush(heros, enemies ++ newEnemies, (manaGained, wildLifeManaGained))
   }
 
-  def doPush(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
+  def doPush(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     // TODO: need to verify working
     val pushedEnemies = cmds
       .collect {
         case Wind(hid, dir) => {
           val hero = heros(hid)
-          val targets = enemies.filter(_._2.distSq(hero) <= 1280 * 1280)
+          val targets = enemies
+            .filter(e => e._2.shieldLife > 0 && e._2.shieldLife < 13)
+            .filter(_._2.distSq(hero) <= 1280 * 1280)
           targets.mapValues(_.withWind(dir)).toMap
         }
       }
       .flatMap(identity)
       .toMap
-    val pushedOpps = cmds
-      .collect {
-        case Wind(hid, dir) => {
-          val hero = heros(hid)
-          val targets = opps.filter(_._2.distSq(hero) <= 1280 * 1280)
-          targets.mapValues(_.withWind(dir))
-        }
-      }
-      .flatMap(identity)
-    moveMobs(heros, opps ++ pushedOpps, enemies, pushedEnemies, gained)
+    moveMobs(heros, enemies, pushedEnemies, gained)
   }
 
-  def moveMobs(heros: HMap, opps: HMap, enemies: EMap, pushed: EMap, gained: (Int, Int)) = {
+  def moveMobs(heros: HMap, enemies: EMap, pushed: EMap, gained: (Int, Int)) = {
     val newEnemies = enemies.mapValues(_.takeTurn()).toMap
-    shieldDecay(heros, opps, newEnemies ++ pushed, gained)
+    shieldDecay(heros, newEnemies ++ pushed, gained)
   }
 
-  def shieldDecay(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
-    // TODO
-    // shieldDecay
-    // cancel control
-    // remove enemies
-    validateWithInput(heros, opps, enemies, gained)
+  def shieldDecay(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
+    val alive = enemies.filter(_._2.health > 0)
+    val decayedE = alive.filter(_._2.shieldLife > 0).mapValues(_.withDecayedShield())
+    val uncontrolled = alive.filter(_._2.isControlled).mapValues(_.withUncontroll())
+    val decayedH = heros.filter(_._2.shieldLife > 0).mapValues(_.withDecayedShield())
+    validateWithInput(heros ++ decayedH, alive ++ decayedE ++ uncontrolled, gained)
   }
 
-  def validateWithInput(heros: HMap, opps: HMap, enemies: EMap, gained: (Int, Int)) = {
+  def validateWithInput(heros: HMap, enemies: EMap, gained: (Int, Int)) = {
     val em = heros ++ enemies
     def check(e: EntityInput) = em.contains(e.id) && em(e.id).validate(e)
     def checkF(e: EntityInput) = em.contains(e.id) && em(e.id).eligibleToFastPath(e)
