@@ -159,17 +159,17 @@ case class Enemy(
     controlDest: Vec2 = Vec2()
 ) extends Entity(id, vPosRaw, vVel) {
   override def validate(e: EntityInput) =
-    (vPos == e.vPos && vVel == e.vVel && health == e.health)
+    (vPos == e.vPos && vVel.truncate == e.vVel && health == e.health)
 
   override def eligibleToFastPath(e: EntityInput) = {
-    val res =
-      vPos == e.vPos && vVel == e.vVel && (health != e.health || shieldLife != e.shieldLife)
-    if (!res) {
+    val baseCond = vPos == e.vPos && vVel.truncate == e.vVel
+    val allowDiff = (health != e.health || shieldLife != e.shieldLife)
+    if (baseCond && allowDiff) {
       Console.err.println("Validation Fail for Enemy fast path")
       Console.err.println(s"  entity: ${this}")
       Console.err.println(s"  input: ${e}")
     }
-    res
+    baseCond && allowDiff
   }
 
   override def takeTurn(): Enemy = {
@@ -395,10 +395,10 @@ class EntityFactory(val gs: GameStatus) {
       if (!curr.bound || gs.myNexus.isClose(curr) || gs.oppNexus.isClose(curr))
         (q, tf)
       else if (gs.myNexus.isNear(curr + vel)) {
-        val newVel = gs.myNexus.dirVec(curr + vel).truncate
+        val newVel = gs.myNexus.dirVec(curr + vel)
         getTrajR(curr + vel, newVel, q :+ (curr, vel), 1)
       } else if (gs.oppNexus.isNear(curr + vel)) {
-        val newVel = gs.oppNexus.dirVec(curr + vel).truncate
+        val newVel = gs.oppNexus.dirVec(curr + vel)
         getTrajR(curr + vel, newVel, q :+ (curr, vel), 2)
       } else
         getTrajR(curr + vel, vel, q :+ (curr, vel), tf)
@@ -418,7 +418,7 @@ class EntityFactory(val gs: GameStatus) {
   }
 
   def createEnemy(e: Enemy, dest: Vec2, isControlled: Boolean) = {
-    val vel = (dest - e.vPos).normalize(400).truncate
+    val vel = (dest - e.vPos).normalize(400)
     val (trajactory, threatFor) = getTraj(e.vPos, vel)
     e.copy(vVel = vel, trajactory = trajactory, threatFor = threatFor, isControlled = isControlled)
   }
